@@ -24,6 +24,27 @@ const parseUrls = (value) =>
     .map((url) => url.trim())
     .filter((url) => url.length > 0);
 
+const extractVideoId = (url) => {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname.includes("youtu.be")) {
+      return parsed.pathname.replace("/", "");
+    }
+    if (parsed.searchParams.has("v")) {
+      return parsed.searchParams.get("v");
+    }
+  } catch (error) {
+    return "";
+  }
+  return "";
+};
+
+const formatTime = (seconds) => {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+};
+
 const buildClip = ({
   title,
   timeRange,
@@ -32,17 +53,36 @@ const buildClip = ({
   topic,
   url,
   duration,
+  startSeconds,
+  endSeconds,
 }) => {
   const card = document.createElement("article");
   card.className = "result-card";
   card.dataset.type = type;
+  const videoId = extractVideoId(url);
+  const fallbackRange =
+    startSeconds !== undefined && endSeconds !== undefined
+      ? `${formatTime(startSeconds)} - ${formatTime(endSeconds)}`
+      : timeRange;
 
   card.innerHTML = `
     <span class="tag">${type === "hero" ? "Hero clip" : "Support"}</span>
     <h4>${title}</h4>
     <p>${topic}</p>
+    <div class="clip-preview">
+      ${
+        videoId
+          ? `<iframe
+              src="https://www.youtube.com/embed/${videoId}?start=${startSeconds}&end=${endSeconds}&controls=1&modestbranding=1"
+              title="${title}"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowfullscreen
+            ></iframe>`
+          : `<div class="clip-fallback">Video preview unavailable</div>`
+      }
+    </div>
     <div class="meta">
-      <span>${timeRange}</span>
+      <span>${fallbackRange}</span>
       <span>${duration} sec</span>
     </div>
     <div class="meta">
@@ -64,11 +104,15 @@ const generateClips = (urls, tone) => {
     for (let i = 0; i < clipCount; i += 1) {
       const start = baseMinute + i * 4;
       const end = start + 1 + (index % 2);
-      const duration = (end - start) * 60;
+      const startSeconds = start * 60;
+      const endSeconds = end * 60;
+      const duration = endSeconds - startSeconds;
       const type = i === 0 ? "hero" : "support";
       clips.push({
         title: `Clip ${i + 1}: ${topics[i % topics.length]}`,
         timeRange: `${start}:00 - ${end}:00`,
+        startSeconds,
+        endSeconds,
         duration,
         topic: `Detected spike around ${topics[i % topics.length].toLowerCase()}.`,
         type,

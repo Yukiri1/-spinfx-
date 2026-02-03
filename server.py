@@ -20,13 +20,17 @@ def generate_clips(urls, tone):
         for clip_index in range(3):
             start = base_minute + clip_index * 4
             end = start + 1 + (index % 2)
-            duration = (end - start) * 60
+            start_seconds = start * 60
+            end_seconds = end * 60
+            duration = end_seconds - start_seconds
             clip_type = "hero" if clip_index == 0 else "support"
             topic = topics[clip_index % len(topics)]
             clips.append(
                 {
                     "title": f"Clip {clip_index + 1}: {topic}",
                     "timeRange": f"{start}:00 - {end}:00",
+                    "startSeconds": start_seconds,
+                    "endSeconds": end_seconds,
                     "duration": duration,
                     "topic": f"Detected spike around {topic.lower()}.",
                     "type": clip_type,
