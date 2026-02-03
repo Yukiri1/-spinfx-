@@ -2,6 +2,7 @@ const form = document.getElementById("clipForm");
 const resultsGrid = document.getElementById("resultsGrid");
 const filterButtons = document.querySelectorAll(".pill");
 const demoButton = document.getElementById("demoButton");
+const statusText = document.getElementById("statusText");
 
 const sampleUrls = [
   "https://www.youtube.com/watch?v=YbJOTdZBX1g",
@@ -112,8 +113,31 @@ form.addEventListener("submit", (event) => {
   event.preventDefault();
   const urls = parseUrls(document.getElementById("videoUrls").value);
   const tone = document.getElementById("tone").value;
-  renderClips(generateClips(urls, tone));
-  updateFilter(document.querySelector(".pill.active").dataset.filter);
+  statusText.textContent = "Analyzing clips...";
+  fetch("/api/clip", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ urls, tone }),
+  })
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error("Backend error");
+      }
+      return response.json();
+    })
+    .then((data) => {
+      renderClips(data.clips || []);
+      updateFilter(document.querySelector(".pill.active").dataset.filter);
+      statusText.textContent = "Highlights ready.";
+    })
+    .catch(() => {
+      renderClips(generateClips(urls, tone));
+      updateFilter(document.querySelector(".pill.active").dataset.filter);
+      statusText.textContent =
+        "Backend unavailable. Showing local preview results.";
+    });
 });
 
 demoButton.addEventListener("click", () => {
@@ -123,3 +147,4 @@ demoButton.addEventListener("click", () => {
 });
 
 renderClips(generateClips(sampleUrls, "Most engaging"));
+statusText.textContent = "Ready to analyze.";
