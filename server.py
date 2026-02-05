@@ -14,12 +14,12 @@ app = Flask(__name__)
 OUTPUT_DIR = Path("outputs")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-CONFIDENCE_MAP = [96, 93, 89, 86, 82]
+CONFIDENCE_MAP = [97, 94, 91, 88, 84]
 TONE_KEYWORDS = {
-    "Most engaging": ["why", "big", "best", "important", "crazy", "today"],
-    "Educational nuggets": ["learn", "because", "example", "strategy", "idea", "step"],
-    "Funny moments": ["laugh", "funny", "joke", "wild", "no way", "haha"],
-    "Emotional peaks": ["love", "fear", "pain", "truth", "amazing", "never"],
+    "Most engaging": ["why", "big", "best", "important", "crazy", "today", "secret", "watch"],
+    "Educational nuggets": ["learn", "because", "example", "strategy", "idea", "step", "framework"],
+    "Funny moments": ["laugh", "funny", "joke", "wild", "no way", "haha", "insane"],
+    "Emotional peaks": ["love", "fear", "pain", "truth", "amazing", "never", "change"],
 }
 
 
@@ -82,10 +82,17 @@ def get_transcript(video_id):
 def score_window(text, tone):
     keywords = TONE_KEYWORDS.get(tone, TONE_KEYWORDS["Most engaging"])
     lowered = text.lower()
+    words = lowered.split()
+
     keyword_hits = sum(lowered.count(word) for word in keywords)
     punctuation_energy = lowered.count("!") + lowered.count("?")
-    length_score = min(len(lowered.split()) / 30, 1.5)
-    return keyword_hits * 3 + punctuation_energy * 2 + length_score
+    density = len(words) / max(1, len(set(words)))
+    hook_phrases = sum(
+        lowered.count(pattern)
+        for pattern in ["you need", "this is", "the reason", "here's", "watch this", "let me show"]
+    )
+    score = keyword_hits * 2.8 + punctuation_energy * 1.9 + min(density, 2.5) + hook_phrases * 2.2
+    return score
 
 
 def suggest_from_transcript(url, tone, transcript, duration):
@@ -118,8 +125,7 @@ def suggest_from_transcript(url, tone, transcript, duration):
         clips.append(
             {
                 "title": f"Clip {idx + 1}: {first_line[:48]}...",
-                "topic": "Speech + pacing peak detected from transcript scoring.",
-                "type": "hero" if idx == 0 else "support",
+                "topic": "AI-ranked for hook strength, pacing, and transcript relevance.",
                 "confidence": CONFIDENCE_MAP[idx],
                 "url": url,
                 "startSeconds": window["start"],
@@ -145,8 +151,7 @@ def fallback_clips(url, tone):
         clips.append(
             {
                 "title": f"Clip {i + 1}: {keywords[i].title()} moment",
-                "topic": "Fallback selection (transcript unavailable).",
-                "type": "hero" if i == 0 else "support",
+                "topic": "Fallback selection when transcript data is unavailable.",
                 "confidence": CONFIDENCE_MAP[i],
                 "url": url,
                 "startSeconds": start,
@@ -249,30 +254,7 @@ def clip():
         generated = suggest_from_transcript(url, tone, transcript, duration)
         clips.extend(generated or fallback_clips(url, tone))
 
-    pipeline = [
-        {
-            "title": "1. Transcript ingestion",
-            "description": "The backend fetches subtitles/transcript lines from YouTube and normalizes timestamps.",
-        },
-        {
-            "title": "2. Moment scoring",
-            "description": "The transcript is scanned in overlapping windows and scored for tone keywords, pacing, and punctuation energy.",
-        },
-        {
-            "title": "3. Clip picking",
-            "description": "Top non-overlapping windows become hero/support clips with confidence values.",
-        },
-        {
-            "title": "4. Smart speaker focus",
-            "description": "At render time, OpenCV face detection estimates where the speaker sits horizontally; crop center shifts toward that point.",
-        },
-        {
-            "title": "5. Render and caption burn",
-            "description": "ffmpeg trims, crops to target ratio, overlays captions (color/size/style/position), and returns a downloadable MP4.",
-        },
-    ]
-
-    return jsonify({"clips": clips, "pipeline": pipeline})
+    return jsonify({"clips": clips})
 
 
 @app.post("/api/render")

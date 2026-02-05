@@ -15,11 +15,11 @@
   <body>
     <div class="page">
       <header class="hero panel">
-        <p class="eyebrow">AI clip studio</p>
-        <h1>Turn a YouTube video into editable vertical clips.</h1>
+        <p class="eyebrow">AI short-form studio</p>
+        <h1>Paste a YouTube link. Get clips rendered instantly.</h1>
         <p>
-          Paste a link, generate high-signal moments, auto-focus around the speaker,
-          and polish captions in an editor inspired by short-form creator tools.
+          ClipCraft now auto-renders when you choose a clip, then lets you refine subtitles,
+          styling, and aspect ratio with speaker lock.
         </p>
       </header>
 
@@ -32,7 +32,7 @@
 
             <div class="row">
               <div>
-                <label for="aspectRatio">Target aspect ratio</label>
+                <label for="aspectRatio">Default aspect ratio</label>
                 <select id="aspectRatio">
                   <option value="9:16">9:16 (Shorts/Reels)</option>
                   <option value="1:1">1:1 (Square)</option>
@@ -57,18 +57,14 @@
         <section class="panel">
           <div class="section-head">
             <h2>2) Suggested clips</h2>
-            <div class="filters">
-              <button class="pill active" data-filter="all">All</button>
-              <button class="pill" data-filter="hero">Hero</button>
-              <button class="pill" data-filter="support">Support</button>
-            </div>
+            <p class="help-text">Choose a clip and it will auto-render with default settings.</p>
           </div>
           <div class="results-grid" id="resultsGrid"></div>
         </section>
 
         <section class="panel" id="editorSection">
           <h2>3) Edit + render</h2>
-          <p class="help-text">Click <strong>Edit this clip</strong> on any suggestion to jump here with that clip loaded.</p>
+          <p class="help-text">Click <strong>Edit this clip</strong> to auto-render instantly, then fine-tune below.</p>
           <p id="selectedClipLabel" class="selected-clip-label">No clip selected yet.</p>
 
           <div class="editor-layout">
@@ -78,8 +74,8 @@
             </div>
 
             <div class="subtitle-panel">
-              <h3>Caption suggestions</h3>
-              <p class="help-text small">Click any line to use it as caption text.</p>
+              <h3>Subtitle suggestions</h3>
+              <p class="help-text small">Click any line to add it to editable subtitles.</p>
               <div id="subtitleList" class="subtitle-list">
                 <p class="empty-subtitles">Select a clip to load subtitle suggestions.</p>
               </div>
@@ -87,9 +83,7 @@
 
             <form id="editorForm" class="editor-controls">
               <h3>Subtitle editor</h3>
-              <p class="help-text small">
-                Edit each subtitle line, timing, and styling. The exported clip will burn these subtitles into the video.
-              </p>
+              <p class="help-text small">Edit each subtitle line, timing, and style, then re-render.</p>
 
               <div id="subtitleEditor" class="subtitle-editor">
                 <p class="empty-subtitles">Pick a clip to load editable subtitles.</p>
@@ -143,15 +137,10 @@
                 </div>
               </div>
 
-              <button class="primary" type="submit" id="renderButton" disabled>Render clip</button>
+              <button class="primary" type="submit" id="renderButton" disabled>Re-render with my settings</button>
               <a id="downloadLink" class="download-link hidden" download>Download rendered clip</a>
             </form>
           </div>
-        </section>
-
-        <section class="panel">
-          <h2>How the AI pipeline works</h2>
-          <ol id="pipelineList" class="pipeline-list"></ol>
         </section>
       </main>
     </div>
