@@ -2,6 +2,8 @@ const form = document.getElementById("clipForm");
 const resultsGrid = document.getElementById("resultsGrid");
 const filterButtons = document.querySelectorAll(".pill");
 const statusText = document.getElementById("statusText");
+const subtitleList = document.getElementById("subtitleList");
+const pipelineList = document.getElementById("pipelineList");
 const editorForm = document.getElementById("editorForm");
 const editorVideo = document.getElementById("editorVideo");
 const videoPlaceholder = document.getElementById("videoPlaceholder");
@@ -35,6 +37,34 @@ const formatTime = (seconds) => {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 };
 
+const renderSubtitleOptions = (lines = []) => {
+  subtitleList.innerHTML = "";
+  if (!lines.length) {
+    subtitleList.innerHTML = "<p class='empty-subtitles'>No transcript lines found for this clip.</p>";
+    return;
+  }
+
+  lines.forEach((line) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "subtitle-line";
+    button.innerHTML = `<span>${formatTime(line.start)} - ${formatTime(line.end)}</span>${line.text}`;
+    button.addEventListener("click", () => {
+      document.getElementById("captionText").value = line.text;
+    });
+    subtitleList.appendChild(button);
+  });
+};
+
+const renderPipeline = (steps = []) => {
+  pipelineList.innerHTML = "";
+  steps.forEach((step) => {
+    const item = document.createElement("li");
+    item.innerHTML = `<h4>${step.title}</h4><p>${step.description}</p>`;
+    pipelineList.appendChild(item);
+  });
+};
+
 const buildClipCard = (clip) => {
   const card = document.createElement("article");
   card.className = "result-card";
@@ -54,13 +84,14 @@ const buildClipCard = (clip) => {
       <span>${formatTime(clip.startSeconds)} - ${formatTime(clip.endSeconds)}</span>
       <span>${clip.confidence}% score</span>
     </div>
-    <button class="choose-btn" type="button">Use in editor</button>
+    <button class="choose-btn" type="button">Open in editor</button>
   `;
 
   card.querySelector(".choose-btn").addEventListener("click", () => {
     selectedClip = clip;
     renderButton.disabled = false;
     statusText.textContent = `Selected: ${clip.title}`;
+    renderSubtitleOptions(clip.transcriptLines || []);
     window.scrollTo({ top: document.getElementById("editorSection").offsetTop - 12, behavior: "smooth" });
   });
 
@@ -90,7 +121,7 @@ form.addEventListener("submit", async (event) => {
   const urls = parseUrls(document.getElementById("videoUrls").value);
   const tone = document.getElementById("tone").value;
 
-  statusText.textContent = "Analyzing video and building clip suggestions...";
+  statusText.textContent = "Analyzing transcript, pacing, and speech density...";
 
   try {
     const response = await fetch("/api/clip", {
@@ -99,15 +130,16 @@ form.addEventListener("submit", async (event) => {
       body: JSON.stringify({ urls, tone }),
     });
 
+    const data = await response.json();
     if (!response.ok) {
-      throw new Error("Failed to analyze videos.");
+      throw new Error(data.error || "Failed to analyze videos.");
     }
 
-    const data = await response.json();
     renderClips(data.clips || []);
-    statusText.textContent = "Suggestions ready. Pick one and edit it below.";
+    renderPipeline(data.pipeline || []);
+    statusText.textContent = "Suggestions ready. Pick one and edit captions.";
   } catch (error) {
-    statusText.textContent = "Could not reach backend. Start server.py and try again.";
+    statusText.textContent = error.message || "Could not analyze videos.";
   }
 });
 
@@ -142,7 +174,7 @@ editorForm.addEventListener("submit", async (event) => {
     },
   };
 
-  statusText.textContent = "Rendering clip (download + crop + captions)...";
+  statusText.textContent = "Rendering clip: download, smart crop, caption burn-in...";
 
   try {
     const response = await fetch("/api/render", {
@@ -151,22 +183,18 @@ editorForm.addEventListener("submit", async (event) => {
       body: JSON.stringify(payload),
     });
 
+    const data = await response.json();
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ error: "Render failed" }));
-      throw new Error(errorData.error || "Render failed");
+      throw new Error(data.error || "Render failed.");
     }
 
-    const data = await response.json();
-    editorVideo.src = data.video_url;
+    editorVideo.src = `${data.video_url}?t=${Date.now()}`;
     editorVideo.style.display = "block";
     videoPlaceholder.style.display = "none";
-
     downloadLink.href = data.video_url;
     downloadLink.classList.remove("hidden");
-    downloadLink.textContent = "Download rendered clip";
-
-    statusText.textContent = "Render complete. You can review and download.";
+    statusText.textContent = `Render complete. Speaker focus x=${Math.round((data.focus_ratio || 0.5) * 100)}%.`;
   } catch (error) {
-    statusText.textContent = `Render error: ${error.message}`;
+    statusText.textContent = error.message || "Render failed.";
   }
 });

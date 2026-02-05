@@ -8,35 +8,31 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700;800&display=swap"
       rel="stylesheet"
     />
   </head>
   <body>
     <div class="page">
-      <header class="hero">
-        <h1>ClipCraft Studio</h1>
+      <header class="hero panel">
+        <p class="eyebrow">AI clip studio</p>
+        <h1>Turn a YouTube video into editable vertical clips.</h1>
         <p>
-          Paste a YouTube link, get suggested highlight clips, render your selected
-          clip to the desired aspect ratio, and edit caption look + placement.
+          Paste a link, generate high-signal moments, auto-focus around the speaker,
+          and polish captions in an editor inspired by short-form creator tools.
         </p>
       </header>
 
       <main>
         <section class="panel">
-          <h2>Create clip suggestions</h2>
+          <h2>1) Analyze a video</h2>
           <form id="clipForm" class="clip-form">
             <label for="videoUrls">YouTube URL(s)</label>
-            <textarea
-              id="videoUrls"
-              rows="3"
-              placeholder="https://www.youtube.com/watch?v=..."
-              required
-            ></textarea>
+            <textarea id="videoUrls" rows="3" placeholder="https://www.youtube.com/watch?v=..." required></textarea>
 
             <div class="row">
               <div>
-                <label for="aspectRatio">Aspect ratio</label>
+                <label for="aspectRatio">Target aspect ratio</label>
                 <select id="aspectRatio">
                   <option value="9:16">9:16 (Shorts/Reels)</option>
                   <option value="1:1">1:1 (Square)</option>
@@ -44,7 +40,7 @@
                 </select>
               </div>
               <div>
-                <label for="tone">Highlight style</label>
+                <label for="tone">Clip strategy</label>
                 <select id="tone">
                   <option>Most engaging</option>
                   <option>Educational nuggets</option>
@@ -53,14 +49,14 @@
                 </select>
               </div>
             </div>
-            <button class="primary" type="submit">Find highlights</button>
+            <button class="primary" type="submit">Find best moments</button>
           </form>
           <p id="statusText" class="status-text">Ready.</p>
         </section>
 
         <section class="panel">
           <div class="section-head">
-            <h2>Suggested clips</h2>
+            <h2>2) Suggested clips</h2>
             <div class="filters">
               <button class="pill active" data-filter="all">All</button>
               <button class="pill" data-filter="hero">Hero</button>
@@ -71,44 +67,42 @@
         </section>
 
         <section class="panel" id="editorSection">
-          <h2>Editing studio</h2>
-          <p class="help-text">
-            Choose a clip above to render it. Then tweak caption color, size,
-            style, and placement (top/middle/bottom).
-          </p>
+          <h2>3) Edit + render</h2>
+          <p class="help-text">Choose a clip, pick one of the caption suggestions, then render.</p>
 
           <div class="editor-layout">
             <div class="editor-preview">
               <video id="editorVideo" controls playsinline></video>
-              <div id="videoPlaceholder" class="video-placeholder">
-                Render a clip to start editing.
+              <div id="videoPlaceholder" class="video-placeholder">Rendered clip preview appears here.</div>
+            </div>
+
+            <div class="subtitle-panel">
+              <h3>Caption suggestions</h3>
+              <p class="help-text small">Click any line to use it as caption text.</p>
+              <div id="subtitleList" class="subtitle-list">
+                <p class="empty-subtitles">Select a clip to load subtitle suggestions.</p>
               </div>
             </div>
 
             <form id="editorForm" class="editor-controls">
-              <h3>Caption options</h3>
-
+              <h3>Caption styling</h3>
               <label for="captionText">Caption text</label>
-              <input
-                id="captionText"
-                value="This is the key moment 🔥"
-                maxlength="90"
-              />
+              <input id="captionText" value="This moment deserves a short 🔥" maxlength="110" />
 
               <div class="row">
                 <div>
-                  <label for="captionColor">Caption color</label>
+                  <label for="captionColor">Color</label>
                   <input id="captionColor" type="color" value="#ffffff" />
                 </div>
                 <div>
-                  <label for="captionSize">Caption size (px)</label>
+                  <label for="captionSize">Size</label>
                   <input id="captionSize" type="number" min="18" max="96" value="46" />
                 </div>
               </div>
 
               <div class="row">
                 <div>
-                  <label for="captionStyle">Caption style</label>
+                  <label for="captionStyle">Style</label>
                   <select id="captionStyle">
                     <option value="bold">Bold</option>
                     <option value="clean">Clean</option>
@@ -116,7 +110,7 @@
                   </select>
                 </div>
                 <div>
-                  <label for="captionPosition">Caption position</label>
+                  <label for="captionPosition">Position</label>
                   <select id="captionPosition">
                     <option value="bottom">Bottom</option>
                     <option value="middle">Middle</option>
@@ -125,14 +119,15 @@
                 </div>
               </div>
 
-              <button class="primary" type="submit" id="renderButton" disabled>
-                Render edited clip
-              </button>
-              <a id="downloadLink" class="download-link hidden" download>
-                Download rendered clip
-              </a>
+              <button class="primary" type="submit" id="renderButton" disabled>Render clip</button>
+              <a id="downloadLink" class="download-link hidden" download>Download rendered clip</a>
             </form>
           </div>
+        </section>
+
+        <section class="panel">
+          <h2>How the AI pipeline works</h2>
+          <ol id="pipelineList" class="pipeline-list"></ol>
         </section>
       </main>
     </div>

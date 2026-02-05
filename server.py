@@ -1,24 +1,26 @@
+import json
+import math
+import re
 import shutil
 import subprocess
 import uuid
 from pathlib import Path
 
+import cv2
 from flask import Flask, jsonify, request, send_from_directory
+from youtube_transcript_api import YouTubeTranscriptApi
 
-BASE_DIR = Path(__file__).resolve().parent
-OUTPUT_DIR = BASE_DIR / "outputs"
+app = Flask(__name__)
+OUTPUT_DIR = Path("outputs")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
-app = Flask(__name__, static_folder=".", static_url_path="")
-
-HIGHLIGHT_STYLES = {
-    "Most engaging": ["Hook", "Main payoff", "Memorable ending"],
-    "Educational nuggets": ["Core tip", "Step-by-step", "Key takeaway"],
-    "Funny moments": ["Unexpected joke", "Reaction", "Best punchline"],
-    "Emotional peaks": ["Personal story", "Breakthrough", "Big conclusion"],
+CONFIDENCE_MAP = [96, 93, 89, 86, 82]
+TONE_KEYWORDS = {
+    "Most engaging": ["why", "big", "best", "important", "crazy", "today"],
+    "Educational nuggets": ["learn", "because", "example", "strategy", "idea", "step"],
+    "Funny moments": ["laugh", "funny", "joke", "wild", "no way", "haha"],
+    "Emotional peaks": ["love", "fear", "pain", "truth", "amazing", "never"],
 }
-
-CONFIDENCE_MAP = [95, 92, 90, 88, 85]
 
 
 @app.get("/")
@@ -36,32 +38,201 @@ def static_files(filename):
     return send_from_directory(".", filename)
 
 
+def parse_video_id(url):
+    match = re.search(r"(?:v=|youtu\.be/)([A-Za-z0-9_-]{8,})", url)
+    return match.group(1) if match else ""
+
+
+def command_json(cmd):
+    result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+    return json.loads(result.stdout)
+
+
+def get_video_duration(url):
+    try:
+        info = command_json(["yt-dlp", "--dump-single-json", "--skip-download", url])
+        return int(info.get("duration") or 0)
+    except (subprocess.CalledProcessError, json.JSONDecodeError):
+        return 0
+
+
+def get_transcript(video_id):
+    if not video_id:
+        return []
+    try:
+        transcript = YouTubeTranscriptApi.get_transcript(video_id)
+    except Exception:
+        return []
+
+    rows = []
+    for line in transcript:
+        text = (line.get("text") or "").replace("\n", " ").strip()
+        if text:
+            rows.append(
+                {
+                    "start": float(line.get("start") or 0),
+                    "duration": float(line.get("duration") or 0),
+                    "end": float(line.get("start") or 0) + float(line.get("duration") or 0),
+                    "text": text,
+                }
+            )
+    return rows
+
+
+def score_window(text, tone):
+    keywords = TONE_KEYWORDS.get(tone, TONE_KEYWORDS["Most engaging"])
+    lowered = text.lower()
+    keyword_hits = sum(lowered.count(word) for word in keywords)
+    punctuation_energy = lowered.count("!") + lowered.count("?")
+    length_score = min(len(lowered.split()) / 30, 1.5)
+    return keyword_hits * 3 + punctuation_energy * 2 + length_score
+
+
+def suggest_from_transcript(url, tone, transcript, duration):
+    if not transcript:
+        return []
+
+    clip_length = 20
+    windows = []
+    max_time = max(duration, int(transcript[-1]["end"] + 1))
+    for start in range(0, max_time, 8):
+        end = start + clip_length
+        lines = [line for line in transcript if line["start"] < end and line["end"] > start]
+        if not lines:
+            continue
+        text = " ".join(line["text"] for line in lines)
+        windows.append({"start": start, "end": end, "score": score_window(text, tone), "lines": lines})
+
+    windows.sort(key=lambda item: item["score"], reverse=True)
+    selected = []
+    for window in windows:
+        if any(abs(window["start"] - pick["start"]) < 12 for pick in selected):
+            continue
+        selected.append(window)
+        if len(selected) == 3:
+            break
+
+    clips = []
+    for idx, window in enumerate(selected):
+        first_line = window["lines"][0]["text"]
+        clips.append(
+            {
+                "title": f"Clip {idx + 1}: {first_line[:48]}...",
+                "topic": "Speech + pacing peak detected from transcript scoring.",
+                "type": "hero" if idx == 0 else "support",
+                "confidence": CONFIDENCE_MAP[idx],
+                "url": url,
+                "startSeconds": window["start"],
+                "endSeconds": window["end"],
+                "transcriptLines": [
+                    {
+                        "start": max(0, math.floor(line["start"] - window["start"])),
+                        "end": max(1, math.ceil(line["end"] - window["start"])),
+                        "text": line["text"],
+                    }
+                    for line in window["lines"][:8]
+                ],
+            }
+        )
+    return clips
+
+
+def fallback_clips(url, tone):
+    keywords = TONE_KEYWORDS.get(tone, TONE_KEYWORDS["Most engaging"])
+    clips = []
+    for i in range(3):
+        start = 28 + i * 18
+        clips.append(
+            {
+                "title": f"Clip {i + 1}: {keywords[i].title()} moment",
+                "topic": "Fallback selection (transcript unavailable).",
+                "type": "hero" if i == 0 else "support",
+                "confidence": CONFIDENCE_MAP[i],
+                "url": url,
+                "startSeconds": start,
+                "endSeconds": start + 18,
+                "transcriptLines": [],
+            }
+        )
+    return clips
+
+
+def detect_focus_ratio(video_file, start_seconds, end_seconds):
+    cap = cv2.VideoCapture(str(video_file))
+    if not cap.isOpened():
+        return 0.5
+
+    detector = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+    total_seconds = max(2, end_seconds - start_seconds)
+    sample_points = [start_seconds + (i * total_seconds / 6) for i in range(1, 6)]
+    focuses = []
+
+    for second in sample_points:
+        cap.set(cv2.CAP_PROP_POS_MSEC, second * 1000)
+        ok, frame = cap.read()
+        if not ok:
+            continue
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = detector.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80))
+        for (x, _, w, h) in faces:
+            center_x = (x + w / 2) / frame.shape[1]
+            area = w * h
+            focuses.extend([center_x] * max(1, int(area / 3000)))
+
+    cap.release()
+    if not focuses:
+        return 0.5
+    focuses.sort()
+    return min(0.9, max(0.1, focuses[len(focuses) // 2]))
+
+
+def color_hex_to_ffmpeg(color):
+    return (color or "#ffffff").replace("#", "")
+
+
 @app.post("/api/clip")
 def clip():
     payload = request.get_json(silent=True) or {}
     urls = [url.strip() for url in payload.get("urls", []) if isinstance(url, str) and url.strip()]
     tone = payload.get("tone", "Most engaging")
 
-    topics = HIGHLIGHT_STYLES.get(tone, HIGHLIGHT_STYLES["Most engaging"])
-    clips = []
-    for index, url in enumerate(urls):
-        base = 30 + (index * 15)
-        for i in range(3):
-            start_seconds = base + (i * 22)
-            end_seconds = start_seconds + 16 + (i * 2)
-            clips.append(
-                {
-                    "title": f"Clip {i + 1}: {topics[i % len(topics)]}",
-                    "topic": f"Detected best moment around {topics[i % len(topics)].lower()}.",
-                    "type": "hero" if i == 0 else "support",
-                    "confidence": CONFIDENCE_MAP[(index + i) % len(CONFIDENCE_MAP)],
-                    "url": url,
-                    "startSeconds": start_seconds,
-                    "endSeconds": end_seconds,
-                }
-            )
+    if not urls:
+        return jsonify({"error": "Add at least one YouTube URL."}), 400
+    if not shutil.which("yt-dlp"):
+        return jsonify({"error": "yt-dlp is missing. Run: pip install -r requirements.txt"}), 500
 
-    return jsonify({"clips": clips})
+    clips = []
+    for url in urls:
+        video_id = parse_video_id(url)
+        transcript = get_transcript(video_id)
+        duration = get_video_duration(url)
+        generated = suggest_from_transcript(url, tone, transcript, duration)
+        clips.extend(generated or fallback_clips(url, tone))
+
+    pipeline = [
+        {
+            "title": "1. Transcript ingestion",
+            "description": "The backend fetches subtitles/transcript lines from YouTube and normalizes timestamps.",
+        },
+        {
+            "title": "2. Moment scoring",
+            "description": "The transcript is scanned in overlapping windows and scored for tone keywords, pacing, and punctuation energy.",
+        },
+        {
+            "title": "3. Clip picking",
+            "description": "Top non-overlapping windows become hero/support clips with confidence values.",
+        },
+        {
+            "title": "4. Smart speaker focus",
+            "description": "At render time, OpenCV face detection estimates where the speaker sits horizontally; crop center shifts toward that point.",
+        },
+        {
+            "title": "5. Render and caption burn",
+            "description": "ffmpeg trims, crops to target ratio, overlays captions (color/size/style/position), and returns a downloadable MP4.",
+        },
+    ]
+
+    return jsonify({"clips": clips, "pipeline": pipeline})
 
 
 @app.post("/api/render")
@@ -78,95 +249,77 @@ def render_clip():
         return jsonify({"error": "Missing YouTube URL."}), 400
     if end_seconds <= start_seconds:
         return jsonify({"error": "Invalid clip range."}), 400
-
     if not shutil.which("yt-dlp"):
-        return jsonify({"error": "yt-dlp is not installed. Install it with: pip install yt-dlp"}), 500
+        return jsonify({"error": "yt-dlp is not installed."}), 500
     if not shutil.which("ffmpeg"):
-        return jsonify({"error": "ffmpeg is not installed. Install ffmpeg and ensure it's on PATH."}), 500
+        return jsonify({"error": "ffmpeg is not installed."}), 500
 
     job_id = uuid.uuid4().hex[:10]
     source_file = OUTPUT_DIR / f"source-{job_id}.mp4"
     rendered_file = OUTPUT_DIR / f"rendered-{job_id}.mp4"
 
-    duration = end_seconds - start_seconds
-
-    download_cmd = [
-        "yt-dlp",
-        "-f",
-        "mp4",
-        "-o",
-        str(source_file),
-        url,
-    ]
-
     try:
-        subprocess.run(download_cmd, check=True, capture_output=True, text=True)
+        subprocess.run(["yt-dlp", "-f", "mp4", "-o", str(source_file), url], check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as error:
         message = error.stderr.strip() or error.stdout.strip() or "Could not download video"
         return jsonify({"error": f"Download failed: {message}"}), 500
 
-    aspect_map = {
-        "9:16": "crop=ih*9/16:ih",
-        "1:1": "crop='min(iw,ih)':'min(iw,ih)'",
-        "16:9": "crop=iw:iw*9/16",
+    focus_ratio = detect_focus_ratio(source_file, start_seconds, end_seconds)
+
+    crop_map = {
+        "9:16": ("ih*9/16", "ih"),
+        "1:1": ("min(iw,ih)", "min(iw,ih)"),
+        "16:9": ("iw", "iw*9/16"),
     }
-    crop_filter = aspect_map.get(aspect_ratio, "crop=ih*9/16:ih")
+    crop_w, crop_h = crop_map.get(aspect_ratio, crop_map["9:16"])
+    x_expr = f"max(0,min(iw-({crop_w}),iw*{focus_ratio:.4f}-({crop_w})/2))"
+    crop_filter = f"crop={crop_w}:{crop_h}:{x_expr}:0"
 
     caption_text = (caption.get("text") or "").replace(":", "\\:").replace("'", "\\'")
-    caption_color = (caption.get("color") or "#ffffff").replace("#", "")
+    caption_color = color_hex_to_ffmpeg(caption.get("color") or "#ffffff")
     caption_size = int(caption.get("size") or 46)
     caption_style = caption.get("style") or "bold"
     caption_position = caption.get("position") or "bottom"
 
-    y_map = {
-        "top": "h*0.12",
-        "middle": "(h-text_h)/2",
-        "bottom": "h-h*0.16",
-    }
-    y_expr = y_map.get(caption_position, "h-h*0.16")
-
-    border = "0"
-    font_weight_effect = ""
-    if caption_style == "outlined":
-        border = "4"
-    elif caption_style == "bold":
-        font_weight_effect = ",shadowcolor=black,shadowx=2,shadowy=2"
+    y_map = {"top": "h*0.12", "middle": "(h-text_h)/2", "bottom": "h-h*0.16"}
+    border = "4" if caption_style == "outlined" else "0"
+    shadow = ",shadowcolor=black,shadowx=2,shadowy=2" if caption_style == "bold" else ""
 
     drawtext = (
-        f"drawtext=text='{caption_text}':"
-        f"fontcolor={caption_color}:fontsize={caption_size}:"
-        f"x=(w-text_w)/2:y={y_expr}:"
-        f"borderw={border}{font_weight_effect}"
+        f"drawtext=text='{caption_text}':fontcolor={caption_color}:fontsize={caption_size}:"
+        f"x=(w-text_w)/2:y={y_map.get(caption_position, y_map['bottom'])}:borderw={border}{shadow}"
     )
-
     vf = f"{crop_filter},{drawtext}"
 
-    ffmpeg_cmd = [
-        "ffmpeg",
-        "-y",
-        "-ss",
-        str(start_seconds),
-        "-t",
-        str(duration),
-        "-i",
-        str(source_file),
-        "-vf",
-        vf,
-        "-c:v",
-        "libx264",
-        "-preset",
-        "fast",
-        "-crf",
-        "23",
-        "-c:a",
-        "aac",
-        "-movflags",
-        "+faststart",
-        str(rendered_file),
-    ]
-
     try:
-        subprocess.run(ffmpeg_cmd, check=True, capture_output=True, text=True)
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-ss",
+                str(start_seconds),
+                "-t",
+                str(end_seconds - start_seconds),
+                "-i",
+                str(source_file),
+                "-vf",
+                vf,
+                "-c:v",
+                "libx264",
+                "-preset",
+                "fast",
+                "-crf",
+                "22",
+                "-c:a",
+                "aac",
+                "-movflags",
+                "+faststart",
+                str(rendered_file),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
     except subprocess.CalledProcessError as error:
         message = error.stderr.strip() or error.stdout.strip() or "Render failed"
         return jsonify({"error": f"ffmpeg failed: {message}"}), 500
@@ -174,7 +327,7 @@ def render_clip():
         if source_file.exists():
             source_file.unlink(missing_ok=True)
 
-    return jsonify({"video_url": f"/outputs/{rendered_file.name}"})
+    return jsonify({"video_url": f"/outputs/{rendered_file.name}", "focus_ratio": focus_ratio})
 
 
 if __name__ == "__main__":
