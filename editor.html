@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClipCraft Editor</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero panel compact-hero">
+        <p class="eyebrow">Clip editor</p>
+        <h1 id="editorTitle">Editing selected clip</h1>
+        <p class="help-text"><a href="/" class="inline-link">← Back to analysis page</a></p>
+        <p id="statusText" class="status-text">Preparing editor…</p>
+      </header>
+
+      <main>
+        <section class="panel">
+          <p id="selectedClipLabel" class="selected-clip-label">No clip selected yet.</p>
+
+          <div class="editor-layout">
+            <div class="editor-preview">
+              <video id="editorVideo" controls playsinline></video>
+              <div id="videoPlaceholder" class="video-placeholder">Rendered clip preview appears here.</div>
+            </div>
+
+            <div class="subtitle-panel">
+              <h3>Subtitle suggestions</h3>
+              <p class="help-text small">Click any line to add it to editable subtitles.</p>
+              <div id="subtitleList" class="subtitle-list">
+                <p class="empty-subtitles">Select a clip to load subtitle suggestions.</p>
+              </div>
+            </div>
+
+            <form id="editorForm" class="editor-controls">
+              <h3>Subtitle editor</h3>
+              <p class="help-text small">Edit each subtitle line, timing, and style, then re-render.</p>
+
+              <div id="subtitleEditor" class="subtitle-editor">
+                <p class="empty-subtitles">Pick a clip to load editable subtitles.</p>
+              </div>
+
+              <div class="row">
+                <div>
+                  <label for="editorAspectRatio">Aspect ratio</label>
+                  <select id="editorAspectRatio">
+                    <option value="9:16">9:16 (Shorts/Reels)</option>
+                    <option value="1:1">1:1 (Square)</option>
+                    <option value="16:9">16:9 (Landscape)</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="speakerLock">Speaker lock</label>
+                  <select id="speakerLock">
+                    <option value="on">On (auto track speaker)</option>
+                    <option value="off">Off (center crop)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="row">
+                <div>
+                  <label for="subtitleColor">Subtitle color</label>
+                  <input id="subtitleColor" type="color" value="#ffffff" />
+                </div>
+                <div>
+                  <label for="subtitleSize">Size</label>
+                  <input id="subtitleSize" type="number" min="18" max="96" value="44" />
+                </div>
+              </div>
+
+              <div class="row">
+                <div>
+                  <label for="subtitleStyle">Style</label>
+                  <select id="subtitleStyle">
+                    <option value="bold">Bold</option>
+                    <option value="clean">Clean</option>
+                    <option value="outlined">Outlined</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="subtitlePosition">Position</label>
+                  <select id="subtitlePosition">
+                    <option value="bottom">Bottom</option>
+                    <option value="middle">Middle</option>
+                    <option value="top">Top</option>
+                  </select>
+                </div>
+              </div>
+
+              <button class="primary" type="submit" id="renderButton">Re-render with my settings</button>
+              <a id="downloadLink" class="download-link hidden" download>Download rendered clip</a>
+            </form>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="editor.js"></script>
+  </body>
+</html>
