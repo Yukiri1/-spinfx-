@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ClipCraft - YouTube Highlight Clipping</title>
+    <title>ClipCraft Studio</title>
     <link rel="stylesheet" href="styles.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -15,78 +15,32 @@
   <body>
     <div class="page">
       <header class="hero">
-        <nav class="nav">
-          <div class="logo">ClipCraft</div>
-          <button class="ghost-button">Request demo</button>
-        </nav>
-        <div class="hero-content">
-          <div>
-            <p class="eyebrow">Smart highlight extraction for YouTube</p>
-            <h1>Paste videos. Get the best clips, instantly.</h1>
-            <p class="subhead">
-              ClipCraft analyzes your YouTube links, maps the emotional peaks, and
-              surfaces ready-to-share highlight moments. Perfect for creators,
-              editors, and social teams.
-            </p>
-            <div class="hero-actions">
-              <button class="primary" id="demoButton">Generate highlights</button>
-              <button class="secondary">Watch walkthrough</button>
-            </div>
-          </div>
-          <div class="hero-card">
-            <div class="card-header">
-              <span class="chip">Live preview</span>
-              <span class="status">Processing</span>
-            </div>
-            <div class="card-body">
-              <div class="wave"></div>
-              <p>Analyzing audience spikes, applause, and topic shifts...</p>
-              <div class="progress">
-                <div class="progress-bar"></div>
-              </div>
-              <div class="insights">
-                <div>
-                  <h4>3</h4>
-                  <span>Hero clips</span>
-                </div>
-                <div>
-                  <h4>12</h4>
-                  <span>Supporting moments</span>
-                </div>
-                <div>
-                  <h4>96%</h4>
-                  <span>Confidence</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <h1>ClipCraft Studio</h1>
+        <p>
+          Paste a YouTube link, get suggested highlight clips, render your selected
+          clip to the desired aspect ratio, and edit caption look + placement.
+        </p>
       </header>
 
       <main>
-        <section class="input-section">
-          <div>
-            <h2>Drop your YouTube URLs</h2>
-            <p>
-              Add one or more YouTube links. ClipCraft will recommend the most
-              engaging segments and draft short-form cuts for each video.
-            </p>
-          </div>
+        <section class="panel">
+          <h2>Create clip suggestions</h2>
           <form id="clipForm" class="clip-form">
-            <label for="videoUrls">YouTube URLs</label>
+            <label for="videoUrls">YouTube URL(s)</label>
             <textarea
               id="videoUrls"
-              placeholder="https://www.youtube.com/watch?v=video1\nhttps://youtu.be/video2"
-              rows="4"
+              rows="3"
+              placeholder="https://www.youtube.com/watch?v=..."
               required
             ></textarea>
-            <div class="form-row">
+
+            <div class="row">
               <div>
-                <label for="platform">Output format</label>
-                <select id="platform">
-                  <option>Short-form (9:16)</option>
-                  <option>Square (1:1)</option>
-                  <option>Landscape (16:9)</option>
+                <label for="aspectRatio">Aspect ratio</label>
+                <select id="aspectRatio">
+                  <option value="9:16">9:16 (Shorts/Reels)</option>
+                  <option value="1:1">1:1 (Square)</option>
+                  <option value="16:9">16:9 (Landscape)</option>
                 </select>
               </div>
               <div>
@@ -99,54 +53,88 @@
                 </select>
               </div>
             </div>
-            <button class="primary" type="submit">Extract best parts</button>
+            <button class="primary" type="submit">Find highlights</button>
           </form>
+          <p id="statusText" class="status-text">Ready.</p>
         </section>
 
-        <section class="results" id="results">
-          <div class="results-header">
-            <div>
-              <h2>Highlight recommendations</h2>
-              <p>Clips are ranked by audience retention and topic momentum.</p>
-              <p class="status-text" id="statusText">Ready to analyze.</p>
-            </div>
+        <section class="panel">
+          <div class="section-head">
+            <h2>Suggested clips</h2>
             <div class="filters">
               <button class="pill active" data-filter="all">All</button>
-              <button class="pill" data-filter="hero">Hero clips</button>
-              <button class="pill" data-filter="support">Supporting</button>
+              <button class="pill" data-filter="hero">Hero</button>
+              <button class="pill" data-filter="support">Support</button>
             </div>
           </div>
           <div class="results-grid" id="resultsGrid"></div>
         </section>
 
-        <section class="features">
-          <div class="feature">
-            <h3>Context-aware trimming</h3>
-            <p>
-              We detect topic handoffs, crescendos, and guest reactions to ensure
-              clips start and end cleanly.
-            </p>
-          </div>
-          <div class="feature">
-            <h3>Auto captions + hooks</h3>
-            <p>
-              Generate punchy headlines and subtitle overlays tailored to the
-              platform you choose.
-            </p>
-          </div>
-          <div class="feature">
-            <h3>Share-ready exports</h3>
-            <p>
-              Download MP4, transcript, and shot lists so your editors can move
-              fast.
-            </p>
+        <section class="panel" id="editorSection">
+          <h2>Editing studio</h2>
+          <p class="help-text">
+            Choose a clip above to render it. Then tweak caption color, size,
+            style, and placement (top/middle/bottom).
+          </p>
+
+          <div class="editor-layout">
+            <div class="editor-preview">
+              <video id="editorVideo" controls playsinline></video>
+              <div id="videoPlaceholder" class="video-placeholder">
+                Render a clip to start editing.
+              </div>
+            </div>
+
+            <form id="editorForm" class="editor-controls">
+              <h3>Caption options</h3>
+
+              <label for="captionText">Caption text</label>
+              <input
+                id="captionText"
+                value="This is the key moment 🔥"
+                maxlength="90"
+              />
+
+              <div class="row">
+                <div>
+                  <label for="captionColor">Caption color</label>
+                  <input id="captionColor" type="color" value="#ffffff" />
+                </div>
+                <div>
+                  <label for="captionSize">Caption size (px)</label>
+                  <input id="captionSize" type="number" min="18" max="96" value="46" />
+                </div>
+              </div>
+
+              <div class="row">
+                <div>
+                  <label for="captionStyle">Caption style</label>
+                  <select id="captionStyle">
+                    <option value="bold">Bold</option>
+                    <option value="clean">Clean</option>
+                    <option value="outlined">Outlined</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="captionPosition">Caption position</label>
+                  <select id="captionPosition">
+                    <option value="bottom">Bottom</option>
+                    <option value="middle">Middle</option>
+                    <option value="top">Top</option>
+                  </select>
+                </div>
+              </div>
+
+              <button class="primary" type="submit" id="renderButton" disabled>
+                Render edited clip
+              </button>
+              <a id="downloadLink" class="download-link hidden" download>
+                Download rendered clip
+              </a>
+            </form>
           </div>
         </section>
       </main>
-
-      <footer>
-        <p>Built for creators. Powered by ClipCraft AI.</p>
-      </footer>
     </div>
 
     <script src="app.js"></script>

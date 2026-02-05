@@ -1,28 +1,21 @@
 const form = document.getElementById("clipForm");
 const resultsGrid = document.getElementById("resultsGrid");
 const filterButtons = document.querySelectorAll(".pill");
-const demoButton = document.getElementById("demoButton");
 const statusText = document.getElementById("statusText");
+const editorForm = document.getElementById("editorForm");
+const editorVideo = document.getElementById("editorVideo");
+const videoPlaceholder = document.getElementById("videoPlaceholder");
+const renderButton = document.getElementById("renderButton");
+const downloadLink = document.getElementById("downloadLink");
 
-const sampleUrls = [
-  "https://www.youtube.com/watch?v=YbJOTdZBX1g",
-  "https://youtu.be/aqz-KE-bpKQ",
-];
-
-const highlightStyles = {
-  "Most engaging": ["Crowd roar", "Plot twist", "Mic drop"],
-  "Educational nuggets": ["Key takeaway", "Framework", "Step-by-step"],
-  "Funny moments": ["Unexpected joke", "Bloopers", "Reaction"],
-  "Emotional peaks": ["Heartfelt story", "Breakthrough", "Standing ovation"],
-};
-
-const confidenceMap = [94, 91, 88, 86, 83];
+let currentFilter = "all";
+let selectedClip = null;
 
 const parseUrls = (value) =>
   value
     .split(/\n|,|\s+/)
     .map((url) => url.trim())
-    .filter((url) => url.length > 0);
+    .filter(Boolean);
 
 const extractVideoId = (url) => {
   try {
@@ -30,165 +23,150 @@ const extractVideoId = (url) => {
     if (parsed.hostname.includes("youtu.be")) {
       return parsed.pathname.replace("/", "");
     }
-    if (parsed.searchParams.has("v")) {
-      return parsed.searchParams.get("v");
-    }
-  } catch (error) {
+    return parsed.searchParams.get("v") || "";
+  } catch {
     return "";
   }
-  return "";
 };
 
 const formatTime = (seconds) => {
   const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
+  const secs = Math.floor(seconds % 60);
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 };
 
-const buildClip = ({
-  title,
-  timeRange,
-  type,
-  confidence,
-  topic,
-  url,
-  duration,
-  startSeconds,
-  endSeconds,
-}) => {
+const buildClipCard = (clip) => {
   const card = document.createElement("article");
   card.className = "result-card";
-  card.dataset.type = type;
-  const videoId = extractVideoId(url);
-  const fallbackRange =
-    startSeconds !== undefined && endSeconds !== undefined
-      ? `${formatTime(startSeconds)} - ${formatTime(endSeconds)}`
-      : timeRange;
+  card.dataset.type = clip.type;
+
+  const videoId = extractVideoId(clip.url);
+  const preview = videoId
+    ? `<iframe src="https://www.youtube.com/embed/${videoId}?start=${clip.startSeconds}&end=${clip.endSeconds}&controls=1" allowfullscreen></iframe>`
+    : "<div class='video-placeholder'>Preview unavailable</div>";
 
   card.innerHTML = `
-    <span class="tag">${type === "hero" ? "Hero clip" : "Support"}</span>
-    <h4>${title}</h4>
-    <p>${topic}</p>
-    <div class="clip-preview">
-      ${
-        videoId
-          ? `<iframe
-              src="https://www.youtube.com/embed/${videoId}?start=${startSeconds}&end=${endSeconds}&controls=1&modestbranding=1"
-              title="${title}"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowfullscreen
-            ></iframe>`
-          : `<div class="clip-fallback">Video preview unavailable</div>`
-      }
-    </div>
+    <span class="tag">${clip.type === "hero" ? "Hero clip" : "Support clip"}</span>
+    <h4>${clip.title}</h4>
+    <p>${clip.topic}</p>
+    <div class="clip-preview">${preview}</div>
     <div class="meta">
-      <span>${fallbackRange}</span>
-      <span>${duration} sec</span>
+      <span>${formatTime(clip.startSeconds)} - ${formatTime(clip.endSeconds)}</span>
+      <span>${clip.confidence}% score</span>
     </div>
-    <div class="meta">
-      <span>${url}</span>
-      <span>${confidence}% confidence</span>
-    </div>
+    <button class="choose-btn" type="button">Use in editor</button>
   `;
+
+  card.querySelector(".choose-btn").addEventListener("click", () => {
+    selectedClip = clip;
+    renderButton.disabled = false;
+    statusText.textContent = `Selected: ${clip.title}`;
+    window.scrollTo({ top: document.getElementById("editorSection").offsetTop - 12, behavior: "smooth" });
+  });
 
   return card;
 };
 
-const generateClips = (urls, tone) => {
-  const clips = [];
-  urls.forEach((url, index) => {
-    const baseMinute = 2 + index * 3;
-    const topics = highlightStyles[tone] || highlightStyles["Most engaging"];
-    const clipCount = 3;
-
-    for (let i = 0; i < clipCount; i += 1) {
-      const start = baseMinute + i * 4;
-      const end = start + 1 + (index % 2);
-      const startSeconds = start * 60;
-      const endSeconds = end * 60;
-      const duration = endSeconds - startSeconds;
-      const type = i === 0 ? "hero" : "support";
-      clips.push({
-        title: `Clip ${i + 1}: ${topics[i % topics.length]}`,
-        timeRange: `${start}:00 - ${end}:00`,
-        startSeconds,
-        endSeconds,
-        duration,
-        topic: `Detected spike around ${topics[i % topics.length].toLowerCase()}.`,
-        type,
-        confidence: confidenceMap[(index + i) % confidenceMap.length],
-        url,
-      });
-    }
+const applyFilter = () => {
+  document.querySelectorAll(".result-card").forEach((card) => {
+    const show = currentFilter === "all" || card.dataset.type === currentFilter;
+    card.style.display = show ? "flex" : "none";
   });
-
-  return clips;
 };
 
 const renderClips = (clips) => {
   resultsGrid.innerHTML = "";
-  if (clips.length === 0) {
-    resultsGrid.innerHTML =
-      "<p class=\"empty\">Add a YouTube URL to see highlight suggestions.</p>";
+  if (!clips.length) {
+    resultsGrid.innerHTML = "<p class='help-text'>No clips generated for this input.</p>";
     return;
   }
 
-  clips.forEach((clip) => {
-    resultsGrid.appendChild(buildClip(clip));
-  });
+  clips.forEach((clip) => resultsGrid.appendChild(buildClipCard(clip)));
+  applyFilter();
 };
 
-const updateFilter = (filter) => {
-  document.querySelectorAll(".result-card").forEach((card) => {
-    const matches = filter === "all" || card.dataset.type === filter;
-    card.style.display = matches ? "flex" : "none";
-  });
-};
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const urls = parseUrls(document.getElementById("videoUrls").value);
+  const tone = document.getElementById("tone").value;
+
+  statusText.textContent = "Analyzing video and building clip suggestions...";
+
+  try {
+    const response = await fetch("/api/clip", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ urls, tone }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to analyze videos.");
+    }
+
+    const data = await response.json();
+    renderClips(data.clips || []);
+    statusText.textContent = "Suggestions ready. Pick one and edit it below.";
+  } catch (error) {
+    statusText.textContent = "Could not reach backend. Start server.py and try again.";
+  }
+});
 
 filterButtons.forEach((button) => {
   button.addEventListener("click", () => {
     filterButtons.forEach((btn) => btn.classList.remove("active"));
     button.classList.add("active");
-    updateFilter(button.dataset.filter);
+    currentFilter = button.dataset.filter;
+    applyFilter();
   });
 });
 
-form.addEventListener("submit", (event) => {
+editorForm.addEventListener("submit", async (event) => {
   event.preventDefault();
-  const urls = parseUrls(document.getElementById("videoUrls").value);
-  const tone = document.getElementById("tone").value;
-  statusText.textContent = "Analyzing clips...";
-  fetch("/api/clip", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+
+  if (!selectedClip) {
+    statusText.textContent = "Select a clip first.";
+    return;
+  }
+
+  const payload = {
+    url: selectedClip.url,
+    start_seconds: selectedClip.startSeconds,
+    end_seconds: selectedClip.endSeconds,
+    aspect_ratio: document.getElementById("aspectRatio").value,
+    caption: {
+      text: document.getElementById("captionText").value,
+      color: document.getElementById("captionColor").value,
+      size: Number(document.getElementById("captionSize").value),
+      style: document.getElementById("captionStyle").value,
+      position: document.getElementById("captionPosition").value,
     },
-    body: JSON.stringify({ urls, tone }),
-  })
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error("Backend error");
-      }
-      return response.json();
-    })
-    .then((data) => {
-      renderClips(data.clips || []);
-      updateFilter(document.querySelector(".pill.active").dataset.filter);
-      statusText.textContent = "Highlights ready.";
-    })
-    .catch(() => {
-      renderClips(generateClips(urls, tone));
-      updateFilter(document.querySelector(".pill.active").dataset.filter);
-      statusText.textContent =
-        "Backend unavailable. Showing local preview results.";
+  };
+
+  statusText.textContent = "Rendering clip (download + crop + captions)...";
+
+  try {
+    const response = await fetch("/api/render", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
-});
 
-demoButton.addEventListener("click", () => {
-  const textarea = document.getElementById("videoUrls");
-  textarea.value = sampleUrls.join("\n");
-  form.requestSubmit();
-});
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: "Render failed" }));
+      throw new Error(errorData.error || "Render failed");
+    }
 
-renderClips(generateClips(sampleUrls, "Most engaging"));
-statusText.textContent = "Ready to analyze.";
+    const data = await response.json();
+    editorVideo.src = data.video_url;
+    editorVideo.style.display = "block";
+    videoPlaceholder.style.display = "none";
+
+    downloadLink.href = data.video_url;
+    downloadLink.classList.remove("hidden");
+    downloadLink.textContent = "Download rendered clip";
+
+    statusText.textContent = "Render complete. You can review and download.";
+  } catch (error) {
+    statusText.textContent = `Render error: ${error.message}`;
+  }
+});
