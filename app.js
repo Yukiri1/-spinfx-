@@ -4,6 +4,7 @@ const filterButtons = document.querySelectorAll(".pill");
 const statusText = document.getElementById("statusText");
 const selectedClipLabel = document.getElementById("selectedClipLabel");
 const subtitleList = document.getElementById("subtitleList");
+const subtitleEditor = document.getElementById("subtitleEditor");
 const pipelineList = document.getElementById("pipelineList");
 const editorForm = document.getElementById("editorForm");
 const editorVideo = document.getElementById("editorVideo");
@@ -13,6 +14,7 @@ const downloadLink = document.getElementById("downloadLink");
 
 let currentFilter = "all";
 let selectedClip = null;
+let editableSubtitles = [];
 
 const parseUrls = (value) =>
   value
@@ -38,6 +40,64 @@ const formatTime = (seconds) => {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 };
 
+const formatTimePrecise = (seconds) => {
+  const value = Number(seconds) || 0;
+  return value.toFixed(2);
+};
+
+const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+const buildSubtitleEditor = () => {
+  subtitleEditor.innerHTML = "";
+  if (!editableSubtitles.length) {
+    subtitleEditor.innerHTML = "<p class='empty-subtitles'>No transcript lines found for this clip.</p>";
+    return;
+  }
+
+  editableSubtitles.forEach((line, index) => {
+    const row = document.createElement("div");
+    row.className = "subtitle-row";
+    row.innerHTML = `
+      <div class="subtitle-time-inputs">
+        <label>Start (s)<input type="number" min="0" step="0.1" value="${formatTimePrecise(line.start)}" data-kind="start" data-index="${index}" /></label>
+        <label>End (s)<input type="number" min="0.1" step="0.1" value="${formatTimePrecise(line.end)}" data-kind="end" data-index="${index}" /></label>
+      </div>
+      <textarea rows="2" maxlength="140" data-kind="text" data-index="${index}">${line.text}</textarea>
+    `;
+    subtitleEditor.appendChild(row);
+  });
+};
+
+subtitleEditor.addEventListener("input", (event) => {
+  const target = event.target;
+  const index = Number(target.dataset.index);
+  const kind = target.dataset.kind;
+  if (Number.isNaN(index) || !editableSubtitles[index]) {
+    return;
+  }
+
+  const line = editableSubtitles[index];
+  if (kind === "text") {
+    line.text = target.value;
+    return;
+  }
+
+  const value = Number(target.value);
+  if (Number.isNaN(value)) {
+    return;
+  }
+
+  if (kind === "start") {
+    line.start = clamp(value, 0, Math.max(0, line.end - 0.1));
+    target.value = formatTimePrecise(line.start);
+  }
+
+  if (kind === "end") {
+    line.end = Math.max(line.start + 0.1, value);
+    target.value = formatTimePrecise(line.end);
+  }
+});
+
 const renderSubtitleOptions = (lines = []) => {
   subtitleList.innerHTML = "";
   if (!lines.length) {
@@ -51,7 +111,13 @@ const renderSubtitleOptions = (lines = []) => {
     button.className = "subtitle-line";
     button.innerHTML = `<span>${formatTime(line.start)} - ${formatTime(line.end)}</span>${line.text}`;
     button.addEventListener("click", () => {
-      document.getElementById("captionText").value = line.text;
+      editableSubtitles.push({
+        start: line.start,
+        end: line.end,
+        text: line.text,
+      });
+      editableSubtitles.sort((a, b) => a.start - b.start);
+      buildSubtitleEditor();
     });
     subtitleList.appendChild(button);
   });
@@ -93,12 +159,14 @@ const buildClipCard = (clip) => {
     renderButton.disabled = false;
     selectedClipLabel.textContent = `Editing: ${clip.title} (${formatTime(clip.startSeconds)} - ${formatTime(clip.endSeconds)})`;
     statusText.textContent = `Selected: ${clip.title}`;
-    renderSubtitleOptions(clip.transcriptLines || []);
 
-    const firstLine = clip.transcriptLines?.[0]?.text;
-    if (firstLine) {
-      document.getElementById("captionText").value = firstLine;
-    }
+    editableSubtitles = (clip.transcriptLines || []).map((line) => ({
+      start: Number(line.start) || 0,
+      end: Number(line.end) || 1,
+      text: line.text || "",
+    }));
+    buildSubtitleEditor();
+    renderSubtitleOptions(clip.transcriptLines || []);
 
     document.querySelectorAll(".result-card").forEach((node) => node.classList.remove("active-clip"));
     card.classList.add("active-clip");
@@ -148,7 +216,7 @@ form.addEventListener("submit", async (event) => {
 
     renderClips(data.clips || []);
     renderPipeline(data.pipeline || []);
-    statusText.textContent = "Suggestions ready. Pick one and edit captions.";
+    statusText.textContent = "Suggestions ready. Pick one and edit subtitles.";
   } catch (error) {
     statusText.textContent = error.message || "Could not analyze videos.";
   }
@@ -171,21 +239,31 @@ editorForm.addEventListener("submit", async (event) => {
     return;
   }
 
+  const subtitleLines = editableSubtitles
+    .map((line) => ({
+      start: Number(line.start),
+      end: Number(line.end),
+      text: (line.text || "").trim(),
+    }))
+    .filter((line) => line.text && line.end > line.start)
+    .sort((a, b) => a.start - b.start);
+
   const payload = {
     url: selectedClip.url,
     start_seconds: selectedClip.startSeconds,
     end_seconds: selectedClip.endSeconds,
-    aspect_ratio: document.getElementById("aspectRatio").value,
-    caption: {
-      text: document.getElementById("captionText").value,
-      color: document.getElementById("captionColor").value,
-      size: Number(document.getElementById("captionSize").value),
-      style: document.getElementById("captionStyle").value,
-      position: document.getElementById("captionPosition").value,
+    aspect_ratio: document.getElementById("editorAspectRatio").value,
+    speaker_lock: document.getElementById("speakerLock").value !== "off",
+    subtitle_style: {
+      color: document.getElementById("subtitleColor").value,
+      size: Number(document.getElementById("subtitleSize").value),
+      style: document.getElementById("subtitleStyle").value,
+      position: document.getElementById("subtitlePosition").value,
     },
+    subtitles: subtitleLines,
   };
 
-  statusText.textContent = "Rendering clip: download, smart crop, caption burn-in...";
+  statusText.textContent = "Rendering clip: speaker tracking, aspect ratio crop, subtitle burn-in...";
 
   try {
     const response = await fetch("/api/render", {

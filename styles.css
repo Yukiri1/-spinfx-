@@ -84,6 +84,39 @@ textarea, select, input {
 .download-link { display: inline-flex; align-self: flex-start; }
 .hidden { display: none; }
 
+
+.subtitle-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 280px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.subtitle-row {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #0d1530;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.subtitle-time-inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.subtitle-time-inputs label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+}
+
 .pipeline-list { display: grid; gap: 10px; margin-left: 20px; }
 .pipeline-list h4 { margin-bottom: 2px; }
 .pipeline-list p { color: var(--muted); }

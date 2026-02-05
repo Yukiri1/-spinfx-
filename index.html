@@ -86,33 +86,56 @@
             </div>
 
             <form id="editorForm" class="editor-controls">
-              <h3>Caption styling</h3>
-              <label for="captionText">Caption text</label>
-              <input id="captionText" value="This moment deserves a short 🔥" maxlength="110" />
+              <h3>Subtitle editor</h3>
+              <p class="help-text small">
+                Edit each subtitle line, timing, and styling. The exported clip will burn these subtitles into the video.
+              </p>
+
+              <div id="subtitleEditor" class="subtitle-editor">
+                <p class="empty-subtitles">Pick a clip to load editable subtitles.</p>
+              </div>
 
               <div class="row">
                 <div>
-                  <label for="captionColor">Color</label>
-                  <input id="captionColor" type="color" value="#ffffff" />
+                  <label for="editorAspectRatio">Aspect ratio</label>
+                  <select id="editorAspectRatio">
+                    <option value="9:16">9:16 (Shorts/Reels)</option>
+                    <option value="1:1">1:1 (Square)</option>
+                    <option value="16:9">16:9 (Landscape)</option>
+                  </select>
                 </div>
                 <div>
-                  <label for="captionSize">Size</label>
-                  <input id="captionSize" type="number" min="18" max="96" value="46" />
+                  <label for="speakerLock">Speaker lock</label>
+                  <select id="speakerLock">
+                    <option value="on">On (auto track speaker)</option>
+                    <option value="off">Off (center crop)</option>
+                  </select>
                 </div>
               </div>
 
               <div class="row">
                 <div>
-                  <label for="captionStyle">Style</label>
-                  <select id="captionStyle">
+                  <label for="subtitleColor">Subtitle color</label>
+                  <input id="subtitleColor" type="color" value="#ffffff" />
+                </div>
+                <div>
+                  <label for="subtitleSize">Size</label>
+                  <input id="subtitleSize" type="number" min="18" max="96" value="44" />
+                </div>
+              </div>
+
+              <div class="row">
+                <div>
+                  <label for="subtitleStyle">Style</label>
+                  <select id="subtitleStyle">
                     <option value="bold">Bold</option>
                     <option value="clean">Clean</option>
                     <option value="outlined">Outlined</option>
                   </select>
                 </div>
                 <div>
-                  <label for="captionPosition">Position</label>
-                  <select id="captionPosition">
+                  <label for="subtitlePosition">Position</label>
+                  <select id="subtitlePosition">
                     <option value="bottom">Bottom</option>
                     <option value="middle">Middle</option>
                     <option value="top">Top</option>

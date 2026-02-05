@@ -190,6 +190,46 @@ def color_hex_to_ffmpeg(color):
     return (color or "#ffffff").replace("#", "")
 
 
+def ass_escape(text):
+    return (text or "").replace("\\", r"\\\\").replace("{", r"\{").replace("}", r"\}")
+
+
+def seconds_to_ass_time(seconds):
+    total = max(0.0, float(seconds))
+    hours = int(total // 3600)
+    minutes = int((total % 3600) // 60)
+    secs = total % 60
+    return f"{hours}:{minutes:02d}:{secs:05.2f}"
+
+
+def build_ass_subtitles(path, subtitles, style_name="ClipStyle"):
+    lines = [
+        "[Script Info]",
+        "ScriptType: v4.00+",
+        "PlayResX: 1080",
+        "PlayResY: 1920",
+        "WrapStyle: 2",
+        "ScaledBorderAndShadow: yes",
+        "",
+        "[V4+ Styles]",
+        "Format: Name,Fontname,Fontsize,PrimaryColour,SecondaryColour,OutlineColour,BackColour,Bold,Italic,Underline,StrikeOut,ScaleX,ScaleY,Spacing,Angle,BorderStyle,Outline,Shadow,Alignment,MarginL,MarginR,MarginV,Encoding",
+        "Style: ClipStyle,Arial,52,&H00FFFFFF,&H000000FF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,2,1,2,80,80,80,1",
+        "",
+        "[Events]",
+        "Format: Layer,Start,End,Style,Name,MarginL,MarginR,MarginV,Effect,Text",
+    ]
+
+    for line in subtitles:
+        text = ass_escape(line.get("text", "").strip())
+        if not text:
+            continue
+        start = seconds_to_ass_time(line.get("start", 0))
+        end = seconds_to_ass_time(line.get("end", 0))
+        lines.append(f"Dialogue: 0,{start},{end},{style_name},,0,0,0,,{text}")
+
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
 @app.post("/api/clip")
 def clip():
     payload = request.get_json(silent=True) or {}
@@ -243,7 +283,9 @@ def render_clip():
     start_seconds = int(payload.get("start_seconds", 0))
     end_seconds = int(payload.get("end_seconds", 0))
     aspect_ratio = payload.get("aspect_ratio", "9:16")
-    caption = payload.get("caption", {})
+    subtitle_style = payload.get("subtitle_style", {})
+    subtitles = payload.get("subtitles", [])
+    speaker_lock = bool(payload.get("speaker_lock", True))
 
     if not url:
         return jsonify({"error": "Missing YouTube URL."}), 400
@@ -264,7 +306,7 @@ def render_clip():
         message = error.stderr.strip() or error.stdout.strip() or "Could not download video"
         return jsonify({"error": f"Download failed: {message}"}), 500
 
-    focus_ratio = detect_focus_ratio(source_file, start_seconds, end_seconds)
+    focus_ratio = detect_focus_ratio(source_file, start_seconds, end_seconds) if speaker_lock else 0.5
 
     crop_map = {
         "9:16": ("ih*9/16", "ih"),
@@ -275,21 +317,37 @@ def render_clip():
     x_expr = f"max(0,min(iw-({crop_w}),iw*{focus_ratio:.4f}-({crop_w})/2))"
     crop_filter = f"crop={crop_w}:{crop_h}:{x_expr}:0"
 
-    caption_text = (caption.get("text") or "").replace(":", "\\:").replace("'", "\\'")
-    caption_color = color_hex_to_ffmpeg(caption.get("color") or "#ffffff")
-    caption_size = int(caption.get("size") or 46)
-    caption_style = caption.get("style") or "bold"
-    caption_position = caption.get("position") or "bottom"
+    subtitle_color = color_hex_to_ffmpeg(subtitle_style.get("color") or "#ffffff")
+    subtitle_size = int(subtitle_style.get("size") or 44)
+    subtitle_variant = subtitle_style.get("style") or "bold"
+    subtitle_position = subtitle_style.get("position") or "bottom"
 
-    y_map = {"top": "h*0.12", "middle": "(h-text_h)/2", "bottom": "h-h*0.16"}
-    border = "4" if caption_style == "outlined" else "0"
-    shadow = ",shadowcolor=black,shadowx=2,shadowy=2" if caption_style == "bold" else ""
+    alignment_map = {"bottom": "2", "middle": "5", "top": "8"}
+    outline = "3" if subtitle_variant == "outlined" else "1"
+    shadow = "1.4" if subtitle_variant == "bold" else "0"
+    weight = "1" if subtitle_variant in {"bold", "outlined"} else "0"
 
-    drawtext = (
-        f"drawtext=text='{caption_text}':fontcolor={caption_color}:fontsize={caption_size}:"
-        f"x=(w-text_w)/2:y={y_map.get(caption_position, y_map['bottom'])}:borderw={border}{shadow}"
-    )
-    vf = f"{crop_filter},{drawtext}"
+    subtitle_path = OUTPUT_DIR / f"subs-{job_id}.ass"
+    subtitle_lines = []
+    for line in subtitles:
+        start = float(line.get("start", 0))
+        end = float(line.get("end", 0))
+        text = (line.get("text") or "").strip()
+        if end > start and text:
+            subtitle_lines.append({"start": start, "end": end, "text": text})
+
+    if subtitle_lines:
+        build_ass_subtitles(subtitle_path, subtitle_lines)
+
+    subtitle_filter = ""
+    if subtitle_lines:
+        style = (
+            f"Fontsize={subtitle_size},PrimaryColour=&H00{subtitle_color},Outline={outline},"
+            f"Shadow={shadow},Alignment={alignment_map.get(subtitle_position, '2')},Bold={weight}"
+        )
+        subtitle_filter = f",subtitles={subtitle_path.as_posix()}:force_style='{style}'"
+
+    vf = f"{crop_filter}{subtitle_filter}"
 
     try:
         subprocess.run(
@@ -326,6 +384,8 @@ def render_clip():
     finally:
         if source_file.exists():
             source_file.unlink(missing_ok=True)
+        if 'subtitle_path' in locals() and subtitle_path.exists():
+            subtitle_path.unlink(missing_ok=True)
 
     return jsonify({"video_url": f"/outputs/{rendered_file.name}", "focus_ratio": focus_ratio})
 
