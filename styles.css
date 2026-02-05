@@ -19,6 +19,17 @@ main { display: grid; gap: 18px; }
 .hero p, .help-text, .status-text { color: var(--muted); }
 .small { font-size: .86rem; }
 
+.selected-clip-label {
+  margin-top: 8px;
+  color: #8ea4ff;
+  font-weight: 700;
+}
+
+.result-card.active-clip {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(142, 125, 255, 0.2);
+}
+
 .clip-form, .editor-controls { display: flex; flex-direction: column; gap: 12px; }
 label { font-size: .9rem; color: var(--muted); }
 textarea, select, input {

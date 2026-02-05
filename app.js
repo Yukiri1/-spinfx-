@@ -2,6 +2,7 @@ const form = document.getElementById("clipForm");
 const resultsGrid = document.getElementById("resultsGrid");
 const filterButtons = document.querySelectorAll(".pill");
 const statusText = document.getElementById("statusText");
+const selectedClipLabel = document.getElementById("selectedClipLabel");
 const subtitleList = document.getElementById("subtitleList");
 const pipelineList = document.getElementById("pipelineList");
 const editorForm = document.getElementById("editorForm");
@@ -84,15 +85,25 @@ const buildClipCard = (clip) => {
       <span>${formatTime(clip.startSeconds)} - ${formatTime(clip.endSeconds)}</span>
       <span>${clip.confidence}% score</span>
     </div>
-    <button class="choose-btn" type="button">Open in editor</button>
+    <button class="choose-btn" type="button">Edit this clip</button>
   `;
 
   card.querySelector(".choose-btn").addEventListener("click", () => {
     selectedClip = clip;
     renderButton.disabled = false;
+    selectedClipLabel.textContent = `Editing: ${clip.title} (${formatTime(clip.startSeconds)} - ${formatTime(clip.endSeconds)})`;
     statusText.textContent = `Selected: ${clip.title}`;
     renderSubtitleOptions(clip.transcriptLines || []);
-    window.scrollTo({ top: document.getElementById("editorSection").offsetTop - 12, behavior: "smooth" });
+
+    const firstLine = clip.transcriptLines?.[0]?.text;
+    if (firstLine) {
+      document.getElementById("captionText").value = firstLine;
+    }
+
+    document.querySelectorAll(".result-card").forEach((node) => node.classList.remove("active-clip"));
+    card.classList.add("active-clip");
+
+    document.getElementById("editorSection").scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
   return card;
