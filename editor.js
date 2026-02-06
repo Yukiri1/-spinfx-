@@ -8,6 +8,9 @@ const editorEmbed = document.getElementById("editorEmbed");
 const videoPlaceholder = document.getElementById("videoPlaceholder");
 const downloadLink = document.getElementById("downloadLink");
 const editorTitle = document.getElementById("editorTitle");
+const googleLoginButton = document.getElementById("googleLoginButton");
+const logoutButton = document.getElementById("logoutButton");
+const authUserLabel = document.getElementById("authUserLabel");
 
 let selectedClip = null;
 let editableSubtitles = [];
@@ -196,3 +199,36 @@ editorForm.addEventListener("submit", async (event) => {
 });
 
 loadSelectedClip();
+
+
+const initAuth = async () => {
+  if (!googleLoginButton || !logoutButton || !authUserLabel) {
+    return;
+  }
+
+  googleLoginButton.addEventListener("click", () => {
+    window.location.href = `/auth/login/google?next=${encodeURIComponent(window.location.pathname)}`;
+  });
+
+  logoutButton.addEventListener("click", () => {
+    window.location.href = `/auth/logout?next=${encodeURIComponent(window.location.pathname)}`;
+  });
+
+  try {
+    const response = await fetch("/api/me");
+    const data = await response.json();
+    if (data.authenticated && data.user) {
+      googleLoginButton.classList.add("hidden");
+      logoutButton.classList.remove("hidden");
+      authUserLabel.textContent = `Signed in as ${data.user.name || data.user.email || "user"}`;
+    } else {
+      googleLoginButton.classList.remove("hidden");
+      logoutButton.classList.add("hidden");
+      authUserLabel.textContent = "";
+    }
+  } catch {
+    authUserLabel.textContent = "";
+  }
+};
+
+initAuth();

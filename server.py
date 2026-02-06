@@ -1,18 +1,78 @@
 import json
 import math
+import os
 import re
 import shutil
+import sqlite3
 import subprocess
 import uuid
 from pathlib import Path
 
 import cv2
-from flask import Flask, jsonify, request, send_from_directory
+from authlib.integrations.flask_client import OAuth
+from flask import Flask, jsonify, redirect, request, send_from_directory, session, url_for
 from youtube_transcript_api import YouTubeTranscriptApi
 
 app = Flask(__name__)
 OUTPUT_DIR = Path("outputs")
 OUTPUT_DIR.mkdir(exist_ok=True)
+
+USERS_DB = Path("users.db")
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "clipcraft-dev-secret")
+
+oauth = OAuth(app)
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
+GOOGLE_OAUTH_ENABLED = bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
+
+if GOOGLE_OAUTH_ENABLED:
+    oauth.register(
+        name="google",
+        client_id=GOOGLE_CLIENT_ID,
+        client_secret=GOOGLE_CLIENT_SECRET,
+        server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+        client_kwargs={"scope": "openid email profile"},
+    )
+
+
+def init_users_db():
+    with sqlite3.connect(USERS_DB) as conn:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                google_sub TEXT PRIMARY KEY,
+                email TEXT,
+                name TEXT,
+                picture TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                last_login_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+
+def save_google_account(claims):
+    with sqlite3.connect(USERS_DB) as conn:
+        conn.execute(
+            """
+            INSERT INTO users (google_sub, email, name, picture, last_login_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(google_sub) DO UPDATE SET
+                email=excluded.email,
+                name=excluded.name,
+                picture=excluded.picture,
+                last_login_at=CURRENT_TIMESTAMP
+            """,
+            (
+                claims.get("sub", ""),
+                claims.get("email", ""),
+                claims.get("name", ""),
+                claims.get("picture", ""),
+            ),
+        )
+
+
+init_users_db()
 
 CONFIDENCE_MAP = [97, 94, 91, 88, 84]
 TONE_KEYWORDS = {
@@ -213,6 +273,60 @@ def build_youtube_embed(url, start_seconds, end_seconds):
     if not video_id:
         return ""
     return f"https://www.youtube.com/embed/{video_id}?start={max(0, start_seconds)}&end={max(start_seconds + 1, end_seconds)}&autoplay=1&rel=0"
+
+
+@app.get("/api/me")
+def api_me():
+    user = session.get("user")
+    if not user:
+        return jsonify({"authenticated": False, "user": None})
+    return jsonify({"authenticated": True, "user": user})
+
+
+@app.get("/auth/login/google")
+def auth_google_login():
+    next_page = request.args.get("next", "/")
+    session["post_login_redirect"] = next_page
+
+    if not GOOGLE_OAUTH_ENABLED:
+        return redirect(f"{next_page}?auth_error=google_not_configured")
+
+    redirect_uri = url_for("auth_google_callback", _external=True)
+    return oauth.google.authorize_redirect(redirect_uri)
+
+
+@app.get("/auth/callback/google")
+def auth_google_callback():
+    next_page = session.pop("post_login_redirect", "/")
+
+    if not GOOGLE_OAUTH_ENABLED:
+        return redirect(f"{next_page}?auth_error=google_not_configured")
+
+    try:
+        token = oauth.google.authorize_access_token()
+        claims = token.get("userinfo") or {}
+    except Exception:
+        return redirect(f"{next_page}?auth_error=google_login_failed")
+
+    if not claims.get("sub"):
+        return redirect(f"{next_page}?auth_error=google_claims_missing")
+
+    save_google_account(claims)
+    session["user"] = {
+        "sub": claims.get("sub"),
+        "email": claims.get("email"),
+        "name": claims.get("name"),
+        "picture": claims.get("picture"),
+    }
+
+    return redirect(next_page)
+
+
+@app.get("/auth/logout")
+def auth_logout():
+    session.pop("user", None)
+    next_page = request.args.get("next", "/")
+    return redirect(next_page)
 
 
 @app.post("/api/clip")

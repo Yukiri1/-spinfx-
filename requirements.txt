@@ -2,3 +2,4 @@ Flask==3.0.2
 yt-dlp==2024.8.6
 youtube-transcript-api==0.6.2
 opencv-python-headless==4.10.0.84
+Authlib==1.3.1
