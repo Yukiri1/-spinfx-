@@ -277,6 +277,15 @@ def render_clip():
         subprocess.run(["yt-dlp", "-f", "mp4", "-o", str(source_file), url], check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as error:
         message = error.stderr.strip() or error.stdout.strip() or "Could not download video"
+        embed_url = build_youtube_embed(url, start_seconds, end_seconds)
+        if embed_url:
+            return jsonify(
+                {
+                    "preview_embed_url": embed_url,
+                    "focus_ratio": 0.5,
+                    "message": f"Direct download blocked by YouTube. Showing preview mode instead. Details: {message[:180]}",
+                }
+            )
         return jsonify({"error": f"Download failed: {message}"}), 500
 
     focus_ratio = detect_focus_ratio(source_file, start_seconds, end_seconds) if speaker_lock else 0.5
