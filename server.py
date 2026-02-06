@@ -208,6 +208,13 @@ def escape_drawtext(text):
     )
 
 
+def build_youtube_embed(url, start_seconds, end_seconds):
+    video_id = parse_video_id(url)
+    if not video_id:
+        return ""
+    return f"https://www.youtube.com/embed/{video_id}?start={max(0, start_seconds)}&end={max(start_seconds + 1, end_seconds)}&autoplay=1&rel=0"
+
+
 @app.post("/api/clip")
 def clip():
     payload = request.get_json(silent=True) or {}
@@ -248,8 +255,19 @@ def render_clip():
         return jsonify({"error": "Invalid clip range."}), 400
     if not shutil.which("yt-dlp"):
         return jsonify({"error": "yt-dlp is not installed."}), 500
-    if not shutil.which("ffmpeg"):
-        return jsonify({"error": "ffmpeg is not installed."}), 500
+
+    ffmpeg_installed = bool(shutil.which("ffmpeg"))
+    if not ffmpeg_installed:
+        embed_url = build_youtube_embed(url, start_seconds, end_seconds)
+        if not embed_url:
+            return jsonify({"error": "Could not build YouTube preview URL."}), 500
+        return jsonify(
+            {
+                "preview_embed_url": embed_url,
+                "focus_ratio": 0.5,
+                "message": "Preview mode active (no ffmpeg). Install ffmpeg to export downloadable clips.",
+            }
+        )
 
     job_id = uuid.uuid4().hex[:10]
     source_file = OUTPUT_DIR / f"source-{job_id}.mp4"

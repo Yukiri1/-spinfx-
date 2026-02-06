@@ -4,6 +4,7 @@ const subtitleList = document.getElementById("subtitleList");
 const subtitleEditor = document.getElementById("subtitleEditor");
 const editorForm = document.getElementById("editorForm");
 const editorVideo = document.getElementById("editorVideo");
+const editorEmbed = document.getElementById("editorEmbed");
 const videoPlaceholder = document.getElementById("videoPlaceholder");
 const downloadLink = document.getElementById("downloadLink");
 const editorTitle = document.getElementById("editorTitle");
@@ -120,8 +121,8 @@ const runRender = async (mode = "manual") => {
 
   statusText.textContent =
     mode === "auto"
-      ? "Auto-rendering clip with default preset..."
-      : "Re-rendering clip with your updated settings...";
+      ? "Loading your clip preview..."
+      : "Updating preview with your settings...";
 
   try {
     const response = await fetch("/api/render", {
@@ -135,12 +136,26 @@ const runRender = async (mode = "manual") => {
       throw new Error(data.error || "Render failed.");
     }
 
-    editorVideo.src = `${data.video_url}?t=${Date.now()}`;
-    editorVideo.style.display = "block";
+    if (data.preview_embed_url) {
+      editorEmbed.src = data.preview_embed_url;
+      editorEmbed.classList.remove("hidden");
+      editorVideo.pause();
+      editorVideo.removeAttribute("src");
+      editorVideo.load();
+      editorVideo.style.display = "none";
+      downloadLink.classList.add("hidden");
+      statusText.textContent = data.message || "Preview ready. Install ffmpeg to export downloadable files.";
+    } else {
+      editorVideo.src = `${data.video_url}?t=${Date.now()}`;
+      editorVideo.style.display = "block";
+      editorEmbed.src = "";
+      editorEmbed.classList.add("hidden");
+      downloadLink.href = data.video_url;
+      downloadLink.classList.remove("hidden");
+      statusText.textContent = `Render complete. Speaker focus x=${Math.round((data.focus_ratio || 0.5) * 100)}%.`;
+    }
+
     videoPlaceholder.style.display = "none";
-    downloadLink.href = data.video_url;
-    downloadLink.classList.remove("hidden");
-    statusText.textContent = `Render complete. Speaker focus x=${Math.round((data.focus_ratio || 0.5) * 100)}%.`;
   } catch (error) {
     statusText.textContent = error.message || "Render failed.";
   }
