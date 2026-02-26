@@ -1,0 +1,20 @@
+[project]
+name = "clipcraft-backend"
+version = "0.1.0"
+description = "ClipCraft API and orchestration"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi==0.112.0",
+  "uvicorn==0.30.5",
+  "pydantic==2.8.2",
+  "pydantic-settings==2.4.0",
+  "redis==5.0.8",
+  "python-dotenv==1.0.1",
+  "yt-dlp==2024.8.6",
+  "openai==1.40.6",
+  "ffmpeg-python==0.2.0"
+]
+
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
