@@ -8,7 +8,10 @@ import subprocess
 import uuid
 from pathlib import Path
 
-import cv2
+try:
+    import cv2
+except ImportError:
+    cv2 = None
 from authlib.integrations.flask_client import OAuth
 from flask import Flask, jsonify, redirect, request, send_from_directory, session, url_for
 from youtube_transcript_api import YouTubeTranscriptApi
@@ -222,33 +225,76 @@ def fallback_clips(url, tone):
     return clips
 
 
+def weighted_median(values):
+    if not values:
+        return 0.5
+    values = sorted(values, key=lambda item: item[0])
+    total = sum(weight for _, weight in values)
+    running = 0
+    for value, weight in values:
+        running += weight
+        if running >= total / 2:
+            return value
+    return values[-1][0]
+
+
 def detect_focus_ratio(video_file, start_seconds, end_seconds):
+    if cv2 is None:
+        return 0.5
+
     cap = cv2.VideoCapture(str(video_file))
     if not cap.isOpened():
         return 0.5
 
     detector = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
-    total_seconds = max(2, end_seconds - start_seconds)
-    sample_points = [start_seconds + (i * total_seconds / 6) for i in range(1, 6)]
-    focuses = []
+    if detector.empty():
+        cap.release()
+        return 0.5
 
-    for second in sample_points:
+    duration = max(2.0, float(end_seconds - start_seconds))
+    fps = max(1.0, cap.get(cv2.CAP_PROP_FPS) or 24.0)
+    step_seconds = max(0.25, min(0.7, duration / 14))
+    max_samples = 90
+    samples = []
+    previous_gray = None
+
+    second = float(start_seconds)
+    sample_count = 0
+    while second <= float(end_seconds) and sample_count < max_samples:
         cap.set(cv2.CAP_PROP_POS_MSEC, second * 1000)
         ok, frame = cap.read()
         if not ok:
+            second += step_seconds
             continue
+
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = detector.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(80, 80))
-        for (x, _, w, h) in faces:
+        faces = detector.detectMultiScale(gray, scaleFactor=1.08, minNeighbors=4, minSize=(70, 70))
+        motion_map = cv2.absdiff(gray, previous_gray) if previous_gray is not None else None
+
+        for (x, y, w, h) in faces:
             center_x = (x + w / 2) / frame.shape[1]
-            area = w * h
-            focuses.extend([center_x] * max(1, int(area / 3000)))
+            face_area = max(1.0, float(w * h))
+            motion_weight = 0.0
+
+            if motion_map is not None:
+                roi = motion_map[y : y + h, x : x + w]
+                if roi.size:
+                    motion_weight = float(roi.mean()) / 32.0
+
+            score = face_area * (1.0 + motion_weight)
+            samples.append((center_x, score))
+
+        previous_gray = gray
+        sample_count += 1
+        second += step_seconds
 
     cap.release()
-    if not focuses:
+
+    if not samples:
         return 0.5
-    focuses.sort()
-    return min(0.9, max(0.1, focuses[len(focuses) // 2]))
+
+    focus_ratio = weighted_median(samples)
+    return min(0.9, max(0.1, focus_ratio))
 
 
 def color_hex_to_ffmpeg(color):
