@@ -181,3 +181,280 @@ textarea, select, input {
   font-weight: 700;
 }
 .ghost-btn:hover { border-color: var(--accent); }
+
+/* New landing flow matching requested reference */
+.landing-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(900px circle at 20% 30%, rgba(166, 10, 90, 0.25), transparent 52%),
+    radial-gradient(1000px circle at 85% 35%, rgba(0, 190, 220, 0.2), transparent 48%),
+    #040813;
+}
+
+.landing-background {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(420px circle at 50% 80%, rgba(87, 43, 190, 0.18), transparent 70%);
+}
+
+.landing-topbar,
+.landing-main {
+  position: relative;
+  z-index: 1;
+}
+
+.landing-topbar {
+  height: 78px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 44px;
+  background: rgba(5, 9, 20, 0.86);
+}
+
+.landing-logo-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.landing-logo-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(150deg, #ff00a8, #733dff);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 12px 28px rgba(151, 46, 255, 0.28);
+}
+
+.landing-logo-text {
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+.landing-logo-text span {
+  background: linear-gradient(95deg, #ff11a9, #5170ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.landing-login-btn {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  border-radius: 10px;
+  padding: 8px 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.landing-main {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 28px 44px 58px;
+}
+
+.hero-stage {
+  text-align: center;
+  padding: 170px 0 60px;
+}
+
+.hero-chip {
+  display: inline-block;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+  padding: 10px 16px;
+  margin-bottom: 24px;
+  color: #bdd5ff;
+}
+
+.hero-stage h1 {
+  font-size: clamp(2.6rem, 7vw, 5.2rem);
+  line-height: 1.02;
+  max-width: 860px;
+  margin: 0 auto;
+  letter-spacing: -0.02em;
+}
+
+.hero-stage h1 span {
+  background: linear-gradient(90deg, #ff0ca7, #5f45ff, #22ddff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.hero-subtext {
+  max-width: 760px;
+  margin: 20px auto 0;
+  color: #a7afc9;
+  font-size: 1.2rem;
+}
+
+.hero-url-form {
+  margin: 34px auto 0;
+  max-width: 860px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 10px;
+  background: rgba(4, 8, 18, 0.88);
+  box-shadow: 0 14px 40px rgba(163, 41, 235, 0.2);
+}
+
+.hero-url-form input {
+  background: transparent;
+  border: 0;
+  color: #fff;
+  font-size: 1.1rem;
+  padding: 0 10px;
+}
+
+.hero-url-form input:focus {
+  outline: none;
+}
+
+.hero-generate-btn {
+  border: 0;
+  border-radius: 12px;
+  padding: 0 30px;
+  min-height: 54px;
+  font-weight: 800;
+  font-size: 1.12rem;
+  color: #fff;
+  background: linear-gradient(135deg, #ff0da6, #7b3dff);
+  cursor: pointer;
+}
+
+.auth-inline-label {
+  margin-top: 12px;
+  color: #98adff;
+}
+
+.hidden-select,
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.state-panel {
+  margin-top: 44px;
+}
+
+.state-panel h2 {
+  font-size: 3rem;
+  line-height: 1.1;
+}
+
+.state-url {
+  color: #9ea8c9;
+  margin-top: 8px;
+  overflow-wrap: anywhere;
+}
+
+.spinner-wrap {
+  margin-top: 130px;
+  text-align: center;
+}
+
+.spinner {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  border: 7px solid rgba(255, 0, 173, 0.2);
+  border-top-color: #ff00ad;
+  margin: 0 auto 24px;
+  animation: spin 1s linear infinite;
+}
+
+.spinner-wrap h3 {
+  font-size: 2.8rem;
+}
+
+.spinner-wrap .status-text {
+  max-width: 700px;
+  margin: 14px auto 0;
+  color: #a7afc9;
+  font-size: 1.3rem;
+}
+
+.state-subtitle {
+  margin-top: 8px;
+  color: #9ea8c9;
+}
+
+#resultsState .results-grid {
+  margin-top: 22px;
+}
+
+#resultsState .result-card {
+  background: rgba(19, 31, 58, 0.8);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 900px) {
+  .landing-topbar,
+  .landing-main {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .hero-stage {
+    padding-top: 110px;
+  }
+
+  .hero-url-form {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-generate-btn {
+    min-height: 48px;
+  }
+
+  .state-panel h2,
+  .spinner-wrap h3 {
+    font-size: 2.1rem;
+  }
+}
+
+.empty-state-card {
+  grid-column: 1 / -1;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.05);
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 20px;
+}
+
+.empty-state-card h3 {
+  font-size: 2rem;
+}
+
+.empty-state-card p {
+  margin-top: 8px;
+  color: #a7afc9;
+  font-size: 1.2rem;
+}

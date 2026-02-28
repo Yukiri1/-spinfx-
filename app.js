@@ -1,6 +1,12 @@
 const form = document.getElementById("clipForm");
+const heroSection = document.getElementById("heroSection");
+const processingState = document.getElementById("processingState");
+const resultsState = document.getElementById("resultsState");
 const resultsGrid = document.getElementById("resultsGrid");
 const statusText = document.getElementById("statusText");
+const processingUrl = document.getElementById("processingUrl");
+const resultsTitle = document.getElementById("resultsTitle");
+const resultsSubtitle = document.getElementById("resultsSubtitle");
 
 const parseUrls = (value) =>
   value
@@ -34,6 +40,12 @@ const persistClipForEditor = (clip) => {
   localStorage.setItem("clipcraft:selectedClip", JSON.stringify(payload));
 };
 
+const showState = (state) => {
+  heroSection.classList.toggle("hidden", state !== "hero");
+  processingState.classList.toggle("hidden", state !== "processing");
+  resultsState.classList.toggle("hidden", state !== "results");
+};
+
 const buildClipCard = (clip) => {
   const card = document.createElement("article");
   card.className = "result-card";
@@ -64,20 +76,34 @@ const buildClipCard = (clip) => {
 
 const renderClips = (clips) => {
   resultsGrid.innerHTML = "";
+
   if (!clips.length) {
-    resultsGrid.innerHTML = "<p class='help-text'>No clips generated for this input.</p>";
+    resultsTitle.textContent = "No clips found";
+    resultsSubtitle.textContent = "";
+    resultsGrid.innerHTML = `
+      <article class="empty-state-card">
+        <h3>No clips found</h3>
+        <p>We couldn't find highly engaging moments for this video.</p>
+      </article>
+    `;
     return;
   }
 
+  resultsTitle.textContent = `Found ${clips.length} clip${clips.length > 1 ? "s" : ""}`;
+  resultsSubtitle.textContent = "Select a clip to open the editor and fine-tune subtitles + framing.";
   clips.forEach((clip) => resultsGrid.appendChild(buildClipCard(clip)));
 };
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+
   const urls = parseUrls(document.getElementById("videoUrls").value);
   const tone = document.getElementById("tone").value;
+  const primaryUrl = urls[0] || "";
 
-  statusText.textContent = "Analyzing transcript, pacing, and speech density...";
+  showState("processing");
+  processingUrl.textContent = primaryUrl;
+  statusText.textContent = "Our models are analyzing the video to find the most engaging highlights.";
 
   try {
     const response = await fetch("/api/clip", {
@@ -92,7 +118,7 @@ form.addEventListener("submit", async (event) => {
     }
 
     renderClips(data.clips || []);
-    statusText.textContent = "Suggestions ready. Choose one to open the editor.";
+    showState("results");
   } catch (error) {
     statusText.textContent = error.message || "Could not analyze videos.";
   }

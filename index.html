@@ -12,63 +12,73 @@
       rel="stylesheet"
     />
   </head>
-  <body>
-    <div class="page">
-      <header class="hero panel">
-        <p class="eyebrow">AI short-form studio</p>
-        <h1>Paste a YouTube link. Pick your best clip.</h1>
-        <p>
-          ClipCraft analyzes transcript signals and gives you ready-to-edit moments.
-          Click <strong>Edit this clip</strong> to open the full editor page.
+  <body class="landing-shell">
+    <div class="landing-background"></div>
+
+    <header class="landing-topbar">
+      <div class="landing-logo-wrap">
+        <span class="landing-logo-icon">✂</span>
+        <span class="landing-logo-text">Clip<span>Craft</span></span>
+      </div>
+
+      <div class="landing-auth-actions">
+        <button id="googleLoginButton" class="landing-login-btn" type="button">Login</button>
+        <button id="logoutButton" class="landing-login-btn hidden" type="button">Logout</button>
+      </div>
+    </header>
+
+    <main class="landing-main">
+      <section id="heroSection" class="hero-stage">
+        <p class="hero-chip">✨ AI-Powered Video Clipping</p>
+        <h1>
+          Turn long videos into
+          <span>viral Shorts</span> in seconds.
+        </h1>
+        <p class="hero-subtext">
+          Paste a YouTube link and our AI finds the strongest moments, then sends you directly to edit.
         </p>
 
-        <div class="auth-row">
-          <button id="googleLoginButton" class="ghost-btn" type="button">Sign in with Google</button>
-          <button id="logoutButton" class="ghost-btn hidden" type="button">Logout</button>
-          <span id="authUserLabel" class="help-text"></span>
+        <form id="clipForm" class="hero-url-form">
+          <label class="sr-only" for="videoUrls">YouTube URL</label>
+          <input id="videoUrls" type="text" placeholder="Paste YouTube URL here (e.g. https://youtube.com/...)" required />
+
+          <select id="aspectRatio" class="hidden-select">
+            <option value="9:16">9:16</option>
+            <option value="1:1">1:1</option>
+            <option value="16:9">16:9</option>
+          </select>
+
+          <select id="tone" class="hidden-select">
+            <option>Most engaging</option>
+            <option>Educational nuggets</option>
+            <option>Funny moments</option>
+            <option>Emotional peaks</option>
+          </select>
+
+          <button class="hero-generate-btn" type="submit">Generate →</button>
+        </form>
+        <p id="authUserLabel" class="auth-inline-label"></p>
+      </section>
+
+      <section id="processingState" class="state-panel hidden" aria-live="polite">
+        <h2>Processing Video...</h2>
+        <p id="processingUrl" class="state-url"></p>
+
+        <div class="spinner-wrap">
+          <div class="spinner"></div>
+          <h3>AI is watching...</h3>
+          <p id="statusText" class="status-text">
+            Our models are analyzing the video to find the most engaging highlights.
+          </p>
         </div>
-      </header>
+      </section>
 
-      <main>
-        <section class="panel">
-          <h2>1) Analyze a video</h2>
-          <form id="clipForm" class="clip-form">
-            <label for="videoUrls">YouTube URL(s)</label>
-            <textarea id="videoUrls" rows="3" placeholder="https://www.youtube.com/watch?v=..." required></textarea>
-
-            <div class="row">
-              <div>
-                <label for="aspectRatio">Default aspect ratio</label>
-                <select id="aspectRatio">
-                  <option value="9:16">9:16 (Shorts/Reels)</option>
-                  <option value="1:1">1:1 (Square)</option>
-                  <option value="16:9">16:9 (Landscape)</option>
-                </select>
-              </div>
-              <div>
-                <label for="tone">Clip strategy</label>
-                <select id="tone">
-                  <option>Most engaging</option>
-                  <option>Educational nuggets</option>
-                  <option>Funny moments</option>
-                  <option>Emotional peaks</option>
-                </select>
-              </div>
-            </div>
-            <button class="primary" type="submit">Find best moments</button>
-          </form>
-          <p id="statusText" class="status-text">Ready.</p>
-        </section>
-
-        <section class="panel">
-          <div class="section-head">
-            <h2>2) Suggested clips</h2>
-            <p class="help-text">Choose a clip to continue on the dedicated editor page.</p>
-          </div>
-          <div class="results-grid" id="resultsGrid"></div>
-        </section>
-      </main>
-    </div>
+      <section id="resultsState" class="state-panel hidden">
+        <h2 id="resultsTitle">Clips found</h2>
+        <p id="resultsSubtitle" class="state-subtitle"></p>
+        <div class="results-grid" id="resultsGrid"></div>
+      </section>
+    </main>
 
     <script src="app.js"></script>
   </body>
