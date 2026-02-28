@@ -27,6 +27,7 @@ const paletteGrid = document.getElementById("paletteGrid");
 const googleLoginButton = document.getElementById("googleLoginButton");
 const logoutButton = document.getElementById("logoutButton");
 const authUserLabel = document.getElementById("authUserLabel");
+const accountsCsvButton = document.getElementById("accountsCsvButton");
 
 let selectedClip = null;
 let editableSubtitles = [];
@@ -360,12 +361,42 @@ document.getElementById("autoCropBtn").addEventListener("click", () => {
   statusText.textContent = "Auto Crop enabled. Speaker tracking will stay focused on active speaker.";
 });
 
+const authErrorMap = {
+  google_not_configured: "Google login is not configured yet.",
+  google_redirect_failed: "Could not start Google login. Check redirect URI settings.",
+  google_login_failed: "Google sign-in failed. Check redirect URI in Google Cloud.",
+  google_claims_missing: "Google login returned incomplete profile data.",
+  google_denied: "Google login was canceled or denied.",
+};
+
+const maybeShowAuthError = () => {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get("auth_error");
+  if (!code) {
+    return;
+  }
+  const detail = params.get("auth_detail") || "";
+  const base = authErrorMap[code] || `Authentication error: ${code}`;
+  authUserLabel.textContent = detail ? `${base} (${detail})` : base;
+};
+
 const initAuth = async () => {
   if (!googleLoginButton || !logoutButton || !authUserLabel) {
     return;
   }
 
-  googleLoginButton.addEventListener("click", () => {
+  googleLoginButton.addEventListener("click", async () => {
+    try {
+      const providerResponse = await fetch("/api/auth/providers");
+      const providerData = await providerResponse.json();
+      if (!providerData.google?.configured) {
+        authUserLabel.textContent = "Google login is not configured on this server.";
+        return;
+      }
+    } catch {
+      authUserLabel.textContent = "Could not verify auth config. Trying login anyway...";
+    }
+
     window.location.href = `/auth/login/google?next=${encodeURIComponent(window.location.pathname)}`;
   });
 
@@ -373,20 +404,26 @@ const initAuth = async () => {
     window.location.href = `/auth/logout?next=${encodeURIComponent(window.location.pathname)}`;
   });
 
+  maybeShowAuthError();
+
   try {
     const response = await fetch("/api/me");
     const data = await response.json();
     if (data.authenticated && data.user) {
       googleLoginButton.classList.add("hidden");
       logoutButton.classList.remove("hidden");
+      accountsCsvButton?.classList.remove("hidden");
       authUserLabel.textContent = `Signed in as ${data.user.name || data.user.email || "user"}`;
     } else {
       googleLoginButton.classList.remove("hidden");
       logoutButton.classList.add("hidden");
-      authUserLabel.textContent = "";
+      accountsCsvButton?.classList.add("hidden");
+      if (!new URLSearchParams(window.location.search).get("auth_error")) {
+        authUserLabel.textContent = "";
+      }
     }
   } catch {
-    authUserLabel.textContent = "";
+    authUserLabel.textContent = authUserLabel.textContent || "";
   }
 };
 

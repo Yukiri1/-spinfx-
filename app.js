@@ -127,13 +127,45 @@ form.addEventListener("submit", async (event) => {
 const googleLoginButton = document.getElementById("googleLoginButton");
 const logoutButton = document.getElementById("logoutButton");
 const authUserLabel = document.getElementById("authUserLabel");
+const accountsCsvButton = document.getElementById("accountsCsvButton");
+
+const authErrorMap = {
+  google_not_configured: "Google login is not configured yet. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
+  google_redirect_failed: "Could not start Google login. Check redirect URI settings.",
+  google_login_failed: "Google sign-in failed. Please verify authorized redirect URI.",
+  google_claims_missing: "Google login succeeded but required profile data was missing.",
+  google_denied: "Google login was canceled or denied.",
+};
+
+const maybeShowAuthError = () => {
+  const params = new URLSearchParams(window.location.search);
+  const errorCode = params.get("auth_error");
+  if (!errorCode) {
+    return;
+  }
+
+  const detail = params.get("auth_detail") || "";
+  const base = authErrorMap[errorCode] || `Authentication error: ${errorCode}`;
+  authUserLabel.textContent = detail ? `${base} (${detail})` : base;
+};
 
 const initAuth = async () => {
   if (!googleLoginButton || !logoutButton || !authUserLabel) {
     return;
   }
 
-  googleLoginButton.addEventListener("click", () => {
+  googleLoginButton.addEventListener("click", async () => {
+    try {
+      const providerResponse = await fetch("/api/auth/providers");
+      const providerData = await providerResponse.json();
+      if (!providerData.google?.configured) {
+        authUserLabel.textContent = "Google login is not configured on the server yet.";
+        return;
+      }
+    } catch {
+      authUserLabel.textContent = "Could not verify auth configuration. Trying login anyway...";
+    }
+
     window.location.href = `/auth/login/google?next=${encodeURIComponent(window.location.pathname)}`;
   });
 
@@ -141,20 +173,26 @@ const initAuth = async () => {
     window.location.href = `/auth/logout?next=${encodeURIComponent(window.location.pathname)}`;
   });
 
+  maybeShowAuthError();
+
   try {
     const response = await fetch("/api/me");
     const data = await response.json();
     if (data.authenticated && data.user) {
       googleLoginButton.classList.add("hidden");
       logoutButton.classList.remove("hidden");
+      accountsCsvButton?.classList.remove("hidden");
       authUserLabel.textContent = `Signed in as ${data.user.name || data.user.email || "user"}`;
     } else {
       googleLoginButton.classList.remove("hidden");
       logoutButton.classList.add("hidden");
-      authUserLabel.textContent = "";
+      accountsCsvButton?.classList.add("hidden");
+      if (!new URLSearchParams(window.location.search).get("auth_error")) {
+        authUserLabel.textContent = "";
+      }
     }
   } catch {
-    authUserLabel.textContent = "";
+    authUserLabel.textContent = authUserLabel.textContent || "";
   }
 };
 

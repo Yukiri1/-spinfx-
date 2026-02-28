@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 import math
 import os
@@ -7,13 +9,14 @@ import sqlite3
 import subprocess
 import uuid
 from pathlib import Path
+from urllib.parse import urlencode
 
 try:
     import cv2
 except ImportError:
     cv2 = None
 from authlib.integrations.flask_client import OAuth
-from flask import Flask, jsonify, redirect, request, send_from_directory, session, url_for
+from flask import Flask, jsonify, make_response, redirect, request, send_from_directory, session, url_for
 from youtube_transcript_api import YouTubeTranscriptApi
 
 app = Flask(__name__)
@@ -21,6 +24,7 @@ OUTPUT_DIR = Path("outputs")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 USERS_DB = Path("users.db")
+USERS_CSV = Path("accounts_export.csv")
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "clipcraft-dev-secret")
 
 oauth = OAuth(app)
@@ -54,6 +58,45 @@ def init_users_db():
         )
 
 
+
+def fetch_all_users():
+    with sqlite3.connect(USERS_DB) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            """
+            SELECT google_sub, email, name, picture, created_at, last_login_at
+            FROM users
+            ORDER BY last_login_at DESC
+            """
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def write_accounts_csv():
+    users = fetch_all_users()
+    with USERS_CSV.open("w", newline="", encoding="utf-8") as csv_file:
+        writer = csv.DictWriter(
+            csv_file,
+            fieldnames=["google_sub", "email", "name", "picture", "created_at", "last_login_at"],
+        )
+        writer.writeheader()
+        writer.writerows(users)
+
+
+def auth_error_redirect(next_page, code, detail=""):
+    params = {"auth_error": code}
+    if detail:
+        params["auth_detail"] = detail[:140]
+    divider = "&" if "?" in next_page else "?"
+    return redirect(f"{next_page}{divider}{urlencode(params)}")
+
+
+def get_google_redirect_uri():
+    forced = os.getenv("GOOGLE_REDIRECT_URI", "").strip()
+    if forced:
+        return forced
+    return url_for("auth_google_callback", _external=True)
+
 def save_google_account(claims):
     with sqlite3.connect(USERS_DB) as conn:
         conn.execute(
@@ -73,9 +116,11 @@ def save_google_account(claims):
                 claims.get("picture", ""),
             ),
         )
+    write_accounts_csv()
 
 
 init_users_db()
+write_accounts_csv()
 
 CONFIDENCE_MAP = [97, 94, 91, 88, 84]
 TONE_KEYWORDS = {
@@ -329,16 +374,51 @@ def api_me():
     return jsonify({"authenticated": True, "user": user})
 
 
+
+
+@app.get("/api/auth/providers")
+def auth_providers():
+    return jsonify(
+        {
+            "google": {
+                "configured": GOOGLE_OAUTH_ENABLED,
+                "redirect_uri": get_google_redirect_uri() if GOOGLE_OAUTH_ENABLED else "",
+                "missing": [] if GOOGLE_OAUTH_ENABLED else ["GOOGLE_CLIENT_ID", "GOOGLE_CLIENT_SECRET"],
+            }
+        }
+    )
+
+
+@app.get("/api/accounts.csv")
+def accounts_csv():
+    users = fetch_all_users()
+    output = io.StringIO()
+    writer = csv.DictWriter(
+        output,
+        fieldnames=["google_sub", "email", "name", "picture", "created_at", "last_login_at"],
+    )
+    writer.writeheader()
+    writer.writerows(users)
+
+    response = make_response(output.getvalue())
+    response.headers["Content-Type"] = "text/csv; charset=utf-8"
+    response.headers["Content-Disposition"] = "attachment; filename=clipcraft_accounts.csv"
+    return response
+
+
 @app.get("/auth/login/google")
 def auth_google_login():
     next_page = request.args.get("next", "/")
     session["post_login_redirect"] = next_page
 
     if not GOOGLE_OAUTH_ENABLED:
-        return redirect(f"{next_page}?auth_error=google_not_configured")
+        return auth_error_redirect(next_page, "google_not_configured")
 
-    redirect_uri = url_for("auth_google_callback", _external=True)
-    return oauth.google.authorize_redirect(redirect_uri)
+    try:
+        redirect_uri = get_google_redirect_uri()
+        return oauth.google.authorize_redirect(redirect_uri)
+    except Exception as error:
+        return auth_error_redirect(next_page, "google_redirect_failed", str(error))
 
 
 @app.get("/auth/callback/google")
@@ -346,16 +426,19 @@ def auth_google_callback():
     next_page = session.pop("post_login_redirect", "/")
 
     if not GOOGLE_OAUTH_ENABLED:
-        return redirect(f"{next_page}?auth_error=google_not_configured")
+        return auth_error_redirect(next_page, "google_not_configured")
+
+    if request.args.get("error"):
+        return auth_error_redirect(next_page, "google_denied", request.args.get("error_description", ""))
 
     try:
         token = oauth.google.authorize_access_token()
         claims = token.get("userinfo") or {}
-    except Exception:
-        return redirect(f"{next_page}?auth_error=google_login_failed")
+    except Exception as error:
+        return auth_error_redirect(next_page, "google_login_failed", str(error))
 
     if not claims.get("sub"):
-        return redirect(f"{next_page}?auth_error=google_claims_missing")
+        return auth_error_redirect(next_page, "google_claims_missing")
 
     save_google_account(claims)
     session["user"] = {
