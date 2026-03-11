@@ -192,12 +192,22 @@ const buildPayload = () => {
   const trimStartAbsolute = Math.floor(Number(selectedClip.startSeconds) + trimStartValue);
   const trimEndAbsolute = Math.max(trimStartAbsolute + 1, Math.ceil(Number(selectedClip.startSeconds) + trimEndValue));
 
+  const customSubtitles = editableSubtitles
+    .map((line) => ({
+      start: Number(line.start),
+      end: Number(line.end),
+      text: (line.text || "").trim(),
+    }))
+    .filter((line) => line.text && line.end > line.start)
+    .sort((a, b) => a.start - b.start);
+
   return {
     url: selectedClip.url,
     start_seconds: trimStartAbsolute,
     end_seconds: trimEndAbsolute,
     aspect_ratio: activeRatio,
     speaker_lock: speakerLock.value !== "off",
+    use_transcript_subtitles: customSubtitles.length === 0,
     subtitle_style: {
       color: textColorToggle.checked ? activeColor : "#ffffff",
       size: Number(subtitleSize.value),
@@ -205,14 +215,7 @@ const buildPayload = () => {
       position: subtitlePosition.value,
       font: document.getElementById("fontSelect").value,
     },
-    subtitles: editableSubtitles
-      .map((line) => ({
-        start: Number(line.start),
-        end: Number(line.end),
-        text: (line.text || "").trim(),
-      }))
-      .filter((line) => line.text && line.end > line.start)
-      .sort((a, b) => a.start - b.start),
+    subtitles: customSubtitles,
   };
 };
 
@@ -236,24 +239,13 @@ const runRender = async (mode = "manual") => {
       throw new Error(data.error || "Render failed.");
     }
 
-    if (data.preview_embed_url) {
-      editorEmbed.src = data.preview_embed_url;
-      editorEmbed.classList.remove("hidden");
-      editorVideo.pause();
-      editorVideo.removeAttribute("src");
-      editorVideo.load();
-      editorVideo.style.display = "none";
-      downloadLink.classList.add("hidden");
-      statusText.textContent = data.message || "Preview mode active.";
-    } else {
-      editorVideo.src = `${data.video_url}?t=${Date.now()}`;
-      editorVideo.style.display = "block";
-      editorEmbed.src = "";
-      editorEmbed.classList.add("hidden");
-      downloadLink.href = data.video_url;
-      downloadLink.classList.remove("hidden");
-      statusText.textContent = `Render complete. Speaker tracking focus at ${Math.round((data.focus_ratio || 0.5) * 100)}%.`;
-    }
+    editorVideo.src = `${data.video_url}?t=${Date.now()}`;
+    editorVideo.style.display = "block";
+    editorEmbed.src = "";
+    editorEmbed.classList.add("hidden");
+    downloadLink.href = data.video_url;
+    downloadLink.classList.remove("hidden");
+    statusText.textContent = `Render complete. Speaker tracking focus at ${Math.round((data.focus_ratio || 0.5) * 100)}%. Transcript subtitles applied.`;
 
     videoPlaceholder.style.display = "none";
   } catch (error) {
@@ -275,11 +267,7 @@ const loadSelectedClip = () => {
 
     selectedClipLabel.textContent = `${selectedClip.title} · ${formatTime(selectedClip.startSeconds)}-${formatTime(selectedClip.endSeconds)}`;
 
-    editableSubtitles = (selectedClip.transcriptLines || []).map((line) => ({
-      start: Number(line.start) || 0,
-      end: Number(line.end) || 1,
-      text: line.text || "",
-    }));
+    editableSubtitles = [];
 
     document.querySelectorAll(".ratio-btn").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.ratio === activeRatio);

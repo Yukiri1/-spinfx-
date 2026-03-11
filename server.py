@@ -7,6 +7,7 @@ import re
 import shutil
 import sqlite3
 import subprocess
+import textwrap
 import uuid
 from pathlib import Path
 from urllib.parse import urlencode
@@ -185,6 +186,48 @@ def get_transcript(video_id):
                 }
             )
     return rows
+
+
+def chunk_transcript_line(text, start, end, max_chars=42):
+    cleaned = re.sub(r"\s+", " ", (text or "").strip())
+    if not cleaned:
+        return []
+
+    chunks = textwrap.wrap(cleaned, width=max_chars, break_long_words=False, break_on_hyphens=False)
+    if not chunks:
+        return []
+
+    total = max(0.2, float(end) - float(start))
+    part = total / len(chunks)
+    rows = []
+    for idx, chunk in enumerate(chunks):
+        chunk_start = start + (idx * part)
+        chunk_end = start + ((idx + 1) * part)
+        rows.append({"start": chunk_start, "end": max(chunk_start + 0.08, chunk_end), "text": chunk})
+    return rows
+
+
+def transcript_subtitles_for_range(url, start_seconds, end_seconds):
+    video_id = parse_video_id(url)
+    transcript = get_transcript(video_id)
+    if not transcript:
+        return []
+
+    lines = [
+        row
+        for row in transcript
+        if row["end"] > start_seconds and row["start"] < end_seconds
+    ]
+
+    subtitles = []
+    for row in lines:
+        relative_start = max(0.0, float(row["start"]) - float(start_seconds))
+        relative_end = min(float(end_seconds - start_seconds), float(row["end"]) - float(start_seconds))
+        if relative_end <= relative_start:
+            continue
+        subtitles.extend(chunk_transcript_line(row.get("text", ""), relative_start, relative_end))
+
+    return subtitles
 
 
 def score_window(text, tone):
@@ -490,6 +533,7 @@ def render_clip():
     aspect_ratio = payload.get("aspect_ratio", "9:16")
     subtitle_style = payload.get("subtitle_style", {})
     subtitles = payload.get("subtitles", [])
+    use_transcript_subtitles = bool(payload.get("use_transcript_subtitles", True))
     speaker_lock = bool(payload.get("speaker_lock", True))
 
     if not url:
@@ -501,16 +545,7 @@ def render_clip():
 
     ffmpeg_installed = bool(shutil.which("ffmpeg"))
     if not ffmpeg_installed:
-        embed_url = build_youtube_embed(url, start_seconds, end_seconds)
-        if not embed_url:
-            return jsonify({"error": "Could not build YouTube preview URL."}), 500
-        return jsonify(
-            {
-                "preview_embed_url": embed_url,
-                "focus_ratio": 0.5,
-                "message": "Preview mode active (no ffmpeg). Install ffmpeg to export downloadable clips.",
-            }
-        )
+        return jsonify({"error": "ffmpeg is required for real clip rendering. Install ffmpeg and try again."}), 500
 
     job_id = uuid.uuid4().hex[:10]
     source_file = OUTPUT_DIR / f"source-{job_id}.mp4"
@@ -520,15 +555,6 @@ def render_clip():
         subprocess.run(["yt-dlp", "-f", "mp4", "-o", str(source_file), url], check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as error:
         message = error.stderr.strip() or error.stdout.strip() or "Could not download video"
-        embed_url = build_youtube_embed(url, start_seconds, end_seconds)
-        if embed_url:
-            return jsonify(
-                {
-                    "preview_embed_url": embed_url,
-                    "focus_ratio": 0.5,
-                    "message": f"Direct download blocked by YouTube. Showing preview mode instead. Details: {message[:180]}",
-                }
-            )
         return jsonify({"error": f"Download failed: {message}"}), 500
 
     focus_ratio = detect_focus_ratio(source_file, start_seconds, end_seconds) if speaker_lock else 0.5
@@ -551,8 +577,12 @@ def render_clip():
     shadow = "1.4" if subtitle_variant == "bold" else "0"
 
     y_map = {"bottom": "h-h*0.16", "middle": "(h-text_h)/2", "top": "h*0.12"}
+    source_subtitles = subtitles
+    if use_transcript_subtitles and not source_subtitles:
+        source_subtitles = transcript_subtitles_for_range(url, start_seconds, end_seconds)
+
     subtitle_lines = []
-    for line in subtitles:
+    for line in source_subtitles:
         line_start = float(line.get("start", 0))
         line_end = float(line.get("end", 0))
         text = (line.get("text") or "").strip()
