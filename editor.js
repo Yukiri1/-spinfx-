@@ -79,7 +79,7 @@ const updateOverlayPreview = () => {
 const renderSubtitleSuggestions = (lines = []) => {
   subtitleList.innerHTML = "";
   if (!lines.length) {
-    subtitleList.innerHTML = "<p class='empty-subtitles'>No transcript lines found for this clip.</p>";
+    subtitleList.innerHTML = "<p class='empty-subtitles'>No preview transcript lines yet. Render will auto-transcribe and burn subtitles from speech.</p>";
     return;
   }
 

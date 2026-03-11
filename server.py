@@ -12,6 +12,8 @@ import uuid
 from pathlib import Path
 from urllib.parse import urlencode
 
+import requests
+
 try:
     import cv2
 except ImportError:
@@ -152,6 +154,19 @@ def parse_video_id(url):
     return match.group(1) if match else ""
 
 
+def ytdlp_base_args():
+    args = ["yt-dlp"]
+    cookies_file = os.getenv("YTDLP_COOKIES_FILE", "").strip()
+    cookies_browser = os.getenv("YTDLP_COOKIES_FROM_BROWSER", "").strip()
+
+    if cookies_file:
+        args.extend(["--cookies", cookies_file])
+    elif cookies_browser:
+        args.extend(["--cookies-from-browser", cookies_browser])
+
+    return args
+
+
 def command_json(cmd):
     result = subprocess.run(cmd, check=True, capture_output=True, text=True)
     return json.loads(result.stdout)
@@ -159,19 +174,94 @@ def command_json(cmd):
 
 def get_video_duration(url):
     try:
-        info = command_json(["yt-dlp", "--dump-single-json", "--skip-download", url])
+        info = command_json(ytdlp_base_args() + ["--dump-single-json", "--skip-download", url])
         return int(info.get("duration") or 0)
     except (subprocess.CalledProcessError, json.JSONDecodeError):
         return 0
 
 
-def get_transcript(video_id):
+def transcript_from_auto_captions(url):
+    try:
+        info = command_json(ytdlp_base_args() + ["--dump-single-json", "--skip-download", url])
+    except (subprocess.CalledProcessError, json.JSONDecodeError):
+        return []
+
+    candidates = []
+    for source_name in ("subtitles", "automatic_captions"):
+        tracks = info.get(source_name) or {}
+        if not isinstance(tracks, dict):
+            continue
+        for lang, entries in tracks.items():
+            for entry in entries or []:
+                ext = (entry.get("ext") or "").lower()
+                if ext not in {"json3", "srv3", "vtt"}:
+                    continue
+                score = 0
+                if source_name == "subtitles":
+                    score += 100
+                if lang.startswith("en"):
+                    score += 50
+                candidates.append((score, entry.get("url"), ext))
+
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    if not candidates:
+        return []
+
+    caption_url, ext = candidates[0][1], candidates[0][2]
+    if not caption_url:
+        return []
+
+    try:
+        response = requests.get(caption_url, timeout=15)
+        response.raise_for_status()
+    except Exception:
+        return []
+
+    if ext in {"json3", "srv3"}:
+        try:
+            payload = response.json()
+        except Exception:
+            return []
+
+        rows = []
+        for event in payload.get("events", []):
+            segs = event.get("segs") or []
+            text = "".join(seg.get("utf8", "") for seg in segs).replace("\n", " ").strip()
+            if not text:
+                continue
+            start = float(event.get("tStartMs", 0)) / 1000
+            duration = float(event.get("dDurationMs", 0)) / 1000
+            end = start + max(0.2, duration)
+            rows.append({"start": start, "duration": duration, "end": end, "text": text})
+        return rows
+
+    # basic VTT fallback
+    rows = []
+    blocks = re.split(r"\n\s*\n", response.text)
+    time_pattern = re.compile(r"(\d+):(\d+):(\d+\.\d+)\s+-->\s+(\d+):(\d+):(\d+\.\d+)")
+    for block in blocks:
+        lines = [line.strip() for line in block.splitlines() if line.strip()]
+        if len(lines) < 2:
+            continue
+        match = time_pattern.search(lines[0])
+        if not match:
+            continue
+        s_h, s_m, s_s, e_h, e_m, e_s = match.groups()
+        start = int(s_h) * 3600 + int(s_m) * 60 + float(s_s)
+        end = int(e_h) * 3600 + int(e_m) * 60 + float(e_s)
+        text = " ".join(lines[1:]).strip()
+        if text:
+            rows.append({"start": start, "duration": max(0.1, end - start), "end": end, "text": text})
+    return rows
+
+
+def get_transcript(video_id, url=""):
     if not video_id:
         return []
     try:
         transcript = YouTubeTranscriptApi.get_transcript(video_id)
     except Exception:
-        return []
+        return transcript_from_auto_captions(url) if url else []
 
     rows = []
     for line in transcript:
@@ -185,7 +275,9 @@ def get_transcript(video_id):
                     "text": text,
                 }
             )
-    return rows
+    if rows:
+        return rows
+    return transcript_from_auto_captions(url) if url else []
 
 
 def chunk_transcript_line(text, start, end, max_chars=42):
@@ -209,7 +301,7 @@ def chunk_transcript_line(text, start, end, max_chars=42):
 
 def transcript_subtitles_for_range(url, start_seconds, end_seconds):
     video_id = parse_video_id(url)
-    transcript = get_transcript(video_id)
+    transcript = get_transcript(video_id, url)
     if not transcript:
         return []
 
@@ -515,7 +607,7 @@ def clip():
     clips = []
     for url in urls:
         video_id = parse_video_id(url)
-        transcript = get_transcript(video_id)
+        transcript = get_transcript(video_id, url)
         duration = get_video_duration(url)
         generated = suggest_from_transcript(url, tone, transcript, duration)
         clips.extend(generated or fallback_clips(url, tone))
@@ -552,9 +644,17 @@ def render_clip():
     rendered_file = OUTPUT_DIR / f"rendered-{job_id}.mp4"
 
     try:
-        subprocess.run(["yt-dlp", "-f", "mp4", "-o", str(source_file), url], check=True, capture_output=True, text=True)
+        download_cmd = ytdlp_base_args() + ["-f", "mp4/best", "-o", str(source_file), url]
+        subprocess.run(download_cmd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as error:
         message = error.stderr.strip() or error.stdout.strip() or "Could not download video"
+        lowered = message.lower()
+        if "please sign in" in lowered or "precondition check failed" in lowered:
+            message = (
+                "YouTube blocked anonymous download. Sign in support is required. "
+                "Set YTDLP_COOKIES_FROM_BROWSER=chrome (or YTDLP_COOKIES_FILE=path/to/cookies.txt) and try again. "
+                f"Details: {message[:180]}"
+            )
         return jsonify({"error": f"Download failed: {message}"}), 500
 
     focus_ratio = detect_focus_ratio(source_file, start_seconds, end_seconds) if speaker_lock else 0.5
