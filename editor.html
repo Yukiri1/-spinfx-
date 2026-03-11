@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClipCraft Editor</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body class="studio-shell">
+    <header class="studio-topbar">
+      <a href="/" class="studio-brand">
+        <span class="studio-brand-icon">✂</span>
+        <span class="studio-brand-text">Clip<span>Craft</span></span>
+      </a>
+
+      <div class="studio-top-actions">
+        <div class="profile-menu-wrap">
+          <button id="profileButton" class="profile-circle" type="button" aria-label="Profile menu">👤</button>
+          <div id="profileMenu" class="profile-menu hidden">
+            <p id="profileMenuLabel" class="profile-menu-label">Not signed in</p>
+            <button id="signInAction" type="button">Sign in with Google</button>
+            <button id="signOutAction" class="hidden" type="button">Logout</button>
+          </div>
+        </div>
+        <button id="exportButton" class="studio-export-btn" type="button">EXPORT →</button>
+      </div>
+    </header>
+
+    <main class="studio-main">
+      <aside class="studio-left">
+        <h2>EDIT TOOLS</h2>
+
+        <div class="tool-grid">
+          <button type="button" class="tool-chip" id="autoCropBtn">Auto Crop</button>
+          <button type="button" class="tool-chip" id="zoomBtn">Zoom</button>
+          <button type="button" class="tool-chip" id="emojiBtn">Emoji</button>
+          <button type="button" class="tool-chip" id="hooksBtn">Hooks</button>
+        </div>
+
+        <hr />
+
+        <h3>CAPTION STYLES</h3>
+
+        <label>Font
+          <select id="fontSelect">
+            <option value="Manrope">Manrope</option>
+            <option value="Inter">Inter</option>
+            <option value="Poppins">Poppins</option>
+          </select>
+        </label>
+
+        <label>Text size <span id="sizeValue">44</span>
+          <input id="subtitleSize" type="range" min="20" max="120" value="44" />
+        </label>
+
+        <div class="toggle-row"><span>Text Color</span><input id="textColorToggle" type="checkbox" checked /></div>
+        <div class="toggle-row"><span>Highlight</span><input id="highlightToggle" type="checkbox" checked /></div>
+        <div class="toggle-row"><span>Stroke</span><input id="strokeToggle" type="checkbox" checked /></div>
+        <div class="toggle-row"><span>Background</span><input id="backgroundToggle" type="checkbox" /></div>
+
+        <div class="palette" id="paletteGrid">
+          <button type="button" class="palette-color active" data-color="#ffffff" style="--sw:#ffffff"></button>
+          <button type="button" class="palette-color" data-color="#ffd34d" style="--sw:#ffd34d"></button>
+          <button type="button" class="palette-color" data-color="#66e6ff" style="--sw:#66e6ff"></button>
+          <button type="button" class="palette-color" data-color="#ff66d1" style="--sw:#ff66d1"></button>
+          <button type="button" class="palette-color" data-color="#a3ff7c" style="--sw:#a3ff7c"></button>
+          <button type="button" class="palette-color" data-color="#8f9cff" style="--sw:#8f9cff"></button>
+          <button type="button" class="palette-color" data-color="#ff9f6b" style="--sw:#ff9f6b"></button>
+          <button type="button" class="palette-color" data-color="#d6dcff" style="--sw:#d6dcff"></button>
+        </div>
+
+        <div class="subtitle-suggestions">
+          <h4>Subtitle suggestions</h4>
+          <div id="subtitleList" class="subtitle-list">
+            <p class="empty-subtitles">Pick a clip to load suggestions.</p>
+          </div>
+        </div>
+      </aside>
+
+      <section class="studio-center">
+        <div class="studio-preview-frame">
+          <div class="studio-preview-video-wrap">
+            <video id="editorVideo" controls playsinline></video>
+            <iframe id="editorEmbed" class="editor-embed hidden" allowfullscreen></iframe>
+            <div id="videoPlaceholder" class="video-placeholder">Rendered clip preview appears here.</div>
+            <div id="captionOverlay" class="caption-overlay">
+              <p id="overlayLineOne">This is</p>
+              <p id="overlayLineTwo"><span>game-changer</span></p>
+            </div>
+          </div>
+        </div>
+
+        <section class="timeline-panel">
+          <div class="timeline-top">
+            <button type="button" id="playBtn">▶</button>
+            <button type="button" id="pauseBtn">⏸</button>
+            <span id="currentTime">00:00.0</span>
+            <input id="timelineScrubber" type="range" min="0" max="100" value="0" />
+            <span id="durationTime">00:00.0</span>
+          </div>
+
+          <div class="wave-track" id="waveTrack"></div>
+
+          <div class="trim-row">
+            <label>Trim start<input id="trimStart" type="range" min="0" max="100" value="0" /></label>
+            <label>Trim end<input id="trimEnd" type="range" min="0" max="100" value="100" /></label>
+          </div>
+
+          <div id="timelineSubtitles" class="timeline-subtitles"></div>
+          <button type="button" id="addSubtitleBtn" class="add-subtitle-btn">＋ Add Subtitle</button>
+        </section>
+      </section>
+
+      <aside class="studio-right">
+        <p>Aspect Ratio</p>
+        <div class="ratio-pills">
+          <button type="button" class="ratio-btn active" data-ratio="9:16">9:16</button>
+          <button type="button" class="ratio-btn" data-ratio="1:1">1:1</button>
+          <button type="button" class="ratio-btn" data-ratio="16:9">16:9</button>
+        </div>
+
+        <label class="speaker-lock-row">
+          <span>Speaker Tracking</span>
+          <select id="speakerLock">
+            <option value="on">ON</option>
+            <option value="off">OFF</option>
+          </select>
+        </label>
+
+        <label class="caption-pos-row">
+          <span>Subtitle Position</span>
+          <select id="subtitlePosition">
+            <option value="bottom">Bottom</option>
+            <option value="middle">Middle</option>
+            <option value="top">Top</option>
+          </select>
+        </label>
+
+        <p id="selectedClipLabel" class="selected-clip-label">No clip selected yet.</p>
+        <p id="statusText" class="status-text">Preparing editor…</p>
+        <p id="authUserLabel" class="help-text"></p>
+        <a id="downloadLink" class="download-link hidden" download>Download rendered clip</a>
+      </aside>
+    </main>
+
+    <script src="editor.js"></script>
+  </body>
+</html>
