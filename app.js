@@ -124,10 +124,12 @@ form.addEventListener("submit", async (event) => {
   }
 });
 
-const googleLoginButton = document.getElementById("googleLoginButton");
-const logoutButton = document.getElementById("logoutButton");
+const profileButton = document.getElementById("profileButton");
+const profileMenu = document.getElementById("profileMenu");
+const profileMenuLabel = document.getElementById("profileMenuLabel");
+const signInAction = document.getElementById("signInAction");
+const signOutAction = document.getElementById("signOutAction");
 const authUserLabel = document.getElementById("authUserLabel");
-const accountsCsvButton = document.getElementById("accountsCsvButton");
 
 const authErrorMap = {
   google_not_configured: "Google login is not configured yet. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.",
@@ -149,12 +151,42 @@ const maybeShowAuthError = () => {
   authUserLabel.textContent = detail ? `${base} (${detail})` : base;
 };
 
+const setProfileState = (user) => {
+  if (user) {
+    const name = user.name || user.email || "User";
+    profileMenuLabel.textContent = name;
+    profileButton.textContent = (name[0] || "U").toUpperCase();
+    signInAction.classList.add("hidden");
+    signOutAction.classList.remove("hidden");
+    authUserLabel.textContent = `Signed in as ${name}`;
+  } else {
+    profileMenuLabel.textContent = "Not signed in";
+    profileButton.textContent = "👤";
+    signInAction.classList.remove("hidden");
+    signOutAction.classList.add("hidden");
+    if (!new URLSearchParams(window.location.search).get("auth_error")) {
+      authUserLabel.textContent = "";
+    }
+  }
+};
+
 const initAuth = async () => {
-  if (!googleLoginButton || !logoutButton || !authUserLabel) {
+  if (!profileButton || !profileMenu || !profileMenuLabel || !signInAction || !signOutAction || !authUserLabel) {
     return;
   }
 
-  googleLoginButton.addEventListener("click", async () => {
+  profileButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    profileMenu.classList.toggle("hidden");
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!profileMenu.contains(event.target) && event.target !== profileButton) {
+      profileMenu.classList.add("hidden");
+    }
+  });
+
+  signInAction.addEventListener("click", async () => {
     try {
       const providerResponse = await fetch("/api/auth/providers");
       const providerData = await providerResponse.json();
@@ -169,7 +201,7 @@ const initAuth = async () => {
     window.location.href = `/auth/login/google?next=${encodeURIComponent(window.location.pathname)}`;
   });
 
-  logoutButton.addEventListener("click", () => {
+  signOutAction.addEventListener("click", () => {
     window.location.href = `/auth/logout?next=${encodeURIComponent(window.location.pathname)}`;
   });
 
@@ -178,21 +210,9 @@ const initAuth = async () => {
   try {
     const response = await fetch("/api/me");
     const data = await response.json();
-    if (data.authenticated && data.user) {
-      googleLoginButton.classList.add("hidden");
-      logoutButton.classList.remove("hidden");
-      accountsCsvButton?.classList.remove("hidden");
-      authUserLabel.textContent = `Signed in as ${data.user.name || data.user.email || "user"}`;
-    } else {
-      googleLoginButton.classList.remove("hidden");
-      logoutButton.classList.add("hidden");
-      accountsCsvButton?.classList.add("hidden");
-      if (!new URLSearchParams(window.location.search).get("auth_error")) {
-        authUserLabel.textContent = "";
-      }
-    }
+    setProfileState(data.authenticated && data.user ? data.user : null);
   } catch {
-    authUserLabel.textContent = authUserLabel.textContent || "";
+    setProfileState(null);
   }
 };
 

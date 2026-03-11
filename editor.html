@@ -20,9 +20,14 @@
       </a>
 
       <div class="studio-top-actions">
-        <button id="googleLoginButton" class="studio-login-btn" type="button">Login</button>
-        <button id="logoutButton" class="studio-login-btn hidden" type="button">Logout</button>
-        <a id="accountsCsvButton" class="studio-login-btn hidden" href="/api/accounts.csv">Accounts CSV</a>
+        <div class="profile-menu-wrap">
+          <button id="profileButton" class="profile-circle" type="button" aria-label="Profile menu">👤</button>
+          <div id="profileMenu" class="profile-menu hidden">
+            <p id="profileMenuLabel" class="profile-menu-label">Not signed in</p>
+            <button id="signInAction" type="button">Sign in with Google</button>
+            <button id="signOutAction" class="hidden" type="button">Logout</button>
+          </div>
+        </div>
         <button id="exportButton" class="studio-export-btn" type="button">EXPORT →</button>
       </div>
     </header>

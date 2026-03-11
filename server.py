@@ -1,5 +1,3 @@
-import csv
-import io
 import json
 import math
 import os
@@ -19,7 +17,7 @@ try:
 except ImportError:
     cv2 = None
 from authlib.integrations.flask_client import OAuth
-from flask import Flask, jsonify, make_response, redirect, request, send_from_directory, session, url_for
+from flask import Flask, jsonify, redirect, request, send_from_directory, session, url_for
 from youtube_transcript_api import YouTubeTranscriptApi
 
 app = Flask(__name__)
@@ -27,7 +25,6 @@ OUTPUT_DIR = Path("outputs")
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 USERS_DB = Path("users.db")
-USERS_CSV = Path("accounts_export.csv")
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "clipcraft-dev-secret")
 
 oauth = OAuth(app)
@@ -61,29 +58,6 @@ def init_users_db():
         )
 
 
-
-def fetch_all_users():
-    with sqlite3.connect(USERS_DB) as conn:
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            """
-            SELECT google_sub, email, name, picture, created_at, last_login_at
-            FROM users
-            ORDER BY last_login_at DESC
-            """
-        ).fetchall()
-    return [dict(row) for row in rows]
-
-
-def write_accounts_csv():
-    users = fetch_all_users()
-    with USERS_CSV.open("w", newline="", encoding="utf-8") as csv_file:
-        writer = csv.DictWriter(
-            csv_file,
-            fieldnames=["google_sub", "email", "name", "picture", "created_at", "last_login_at"],
-        )
-        writer.writeheader()
-        writer.writerows(users)
 
 
 def auth_error_redirect(next_page, code, detail=""):
@@ -119,11 +93,9 @@ def save_google_account(claims):
                 claims.get("picture", ""),
             ),
         )
-    write_accounts_csv()
 
 
 init_users_db()
-write_accounts_csv()
 
 CONFIDENCE_MAP = [97, 94, 91, 88, 84]
 TONE_KEYWORDS = {
@@ -523,22 +495,6 @@ def auth_providers():
         }
     )
 
-
-@app.get("/api/accounts.csv")
-def accounts_csv():
-    users = fetch_all_users()
-    output = io.StringIO()
-    writer = csv.DictWriter(
-        output,
-        fieldnames=["google_sub", "email", "name", "picture", "created_at", "last_login_at"],
-    )
-    writer.writeheader()
-    writer.writerows(users)
-
-    response = make_response(output.getvalue())
-    response.headers["Content-Type"] = "text/csv; charset=utf-8"
-    response.headers["Content-Disposition"] = "attachment; filename=clipcraft_accounts.csv"
-    return response
 
 
 @app.get("/auth/login/google")
